@@ -5,8 +5,6 @@ import itertools as it
 from libc.stdlib cimport abort, malloc, free
 from libc.string cimport memset
 
-#from cython.parallel import prange, parallel, threadid
-
 # Needed for compile-time information about numpy
 cimport numpy as np
 
@@ -320,6 +318,36 @@ def permanent(np.ndarray[np.complex128_t, ndim=2] a):
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
+    """Computes multi-particle unitary for a given number of photons
+
+    Parameters
+    ----------
+    U : array of complex
+        Single-photon unitary to be transformed
+    n : int
+        Number of photons to compute unitary for
+
+    Returns
+    -------
+    array of complex128
+        Multiparticle unitary over the fock basis. 
+
+    See Also
+    -------
+    fock_basis : Generates fock basis for `n` photons over `m` modes
+
+    Notes
+    -----
+    The computational complexity of this function is not for the 
+    faint of heart. Specifically it goes as :math:`O(Choose[n+m-1,n] * n * 2^n)`
+    where `m` is dimensionality of `U` and `n` is the number of photons.
+
+    References
+    ----------
+    [1] Aaronson, Scott, and Alex Arkhipov. "The computational 
+    complexity of linear optics." In Proceedings of the forty-third 
+    annual ACM symposium on Theory of computing, pp. 333-342. ACM, 2011.
+    """
     assert U.dtype == np.complex128
     cdef size_t m = U.shape[0]
     cdef size_t N = basis_size(n, m)
