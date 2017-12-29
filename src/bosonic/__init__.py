@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 from .aa_phi import aa_phi
+from . import density
 
 __all__ = [
     "__title__", "__summary__", "__uri__", "__version__", "__author__",
-    "__email__", "__license__", "__copyright__", "aa_phi",
+    "__email__", "__license__", "__copyright__", "aa_phi", "density",
 ]
 
 __title__ = "bosonic"
