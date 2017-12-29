@@ -12,7 +12,7 @@ PACKAGES = find_packages(where="src")
 META_PATH = os.path.join("src", "bosonic", "__init__.py")
 KEYWORDS = []
 CLASSIFIERS = []
-INSTALL_REQUIRES = ["numpy", "Cython"]
+INSTALL_REQUIRES = ["numpy", ]
 
 ## Import metadata from src/bosonic/__init__.py
 ## This is taken from:
