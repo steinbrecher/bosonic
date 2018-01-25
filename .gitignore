@@ -102,3 +102,4 @@ ENV/
 
 # Temporary files
 .~
+build.sh
