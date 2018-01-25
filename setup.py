@@ -12,7 +12,9 @@ PACKAGES = find_packages(where="src")
 META_PATH = os.path.join("src", "bosonic", "__init__.py")
 KEYWORDS = []
 CLASSIFIERS = []
-INSTALL_REQUIRES = ["numpy", ]
+INSTALL_REQUIRES = ["numpy", "numba"]
+
+NUMPY_INCLUDE = np.get_include()
 
 ## Import metadata from src/bosonic/__init__.py
 ## This is taken from:
@@ -46,8 +48,8 @@ ext_modules = [
     Extension(
         "bosonic.aa_phi",
         ["src/bosonic/aa_phi.pyx"],
-        extra_compile_args=['-fopenmp', '-Ofast'],
-        extra_link_args=['-fopenmp'],
+        extra_compile_args=['-fopenmp', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
+        extra_link_args=['-fopenmp', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
     )
 ]
 
