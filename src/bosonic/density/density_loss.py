@@ -1,6 +1,6 @@
 import numpy as np
 import itertools as it
-from numba import jit
+# from numba import jit
 from ..aa_phi import aa_phi
 
 def mode_basis(numPhotons, numModes):
@@ -58,7 +58,7 @@ def get_pair_table(n, m):
             if tuple(b) == tuple(inputState):
                 pairLookupTable[i,1] = j
     return pairLookupTable
-    
+
 expansionMapLookup = {}
 def get_expansion_map(n, m):
     # Memoize this function
@@ -70,7 +70,7 @@ def get_expansion_map(n, m):
     expandedBasis = lossy_fock_basis(n, 2*m, includeZero=True)
     pairLookupTable = get_pair_table(n, m)
     zeroStateIdx = len(inputBasis)-1
-    
+
     expansionMap = np.zeros((len(inputBasis),), dtype=int)
     for i in xrange(len(inputBasis)):
         for j in xrange(pairLookupTable.shape[0]):
@@ -85,7 +85,7 @@ def expand_density(rho, n, m):
     """
     expansionMap = get_expansion_map(n, m)
     # N is size of expanded basis. Since zeros always get mapped to zeros, this avoids computing the basis here
-    N = expansionMap[-1] + 1 
+    N = expansionMap[-1] + 1
     sigma = np.zeros((N, N), dtype=complex)
     for i,l in enumerate(expansionMap):
         for j,m in enumerate(expansionMap):
@@ -93,7 +93,7 @@ def expand_density(rho, n, m):
     return sigma
 
 # Step 2 functions
-@jit
+# @jit
 def single_loss_matrix(eta, i, j, m):
     #gives a loss matrix between modes i,j for loss eta (i.e. T=1-eta)
     M = np.eye(2*m, dtype=complex)
@@ -103,7 +103,7 @@ def single_loss_matrix(eta, i, j, m):
     M[j,i]=np.sqrt(eta)
     return M
 
-@jit
+# @jit
 def full_loss_matrix(eta, m):
     #multiply single loss matrices:
     ls = []
@@ -117,7 +117,7 @@ def get_loss_matrix(eta,n,m):
         return lossMatrixLookup[(eta,n,m)]
     except KeyError:
         pass
-    
+
     N = len(lossy_fock_basis(n,2*m,includeZero=True))
     U = full_loss_matrix(eta, m)
     UFock = np.eye(N, dtype=complex)
@@ -143,15 +143,15 @@ def get_trace_table(n,m):
         return traceTableLookup[(n,m)]
     except KeyError:
         pass
-    
+
     pairTable = get_pair_table(n,m)
     N = pairTable.shape[0]
     A = pairTable[:,0]
     B = pairTable[:,1]
-    
+
     # N = dim(sigma)
     N = pairTable.shape[0]
-    
+
     klPairs = []
     aPairs = []
     for k in xrange(N):
@@ -166,7 +166,7 @@ def get_trace_table(n,m):
     traceTableLookup[(n,m)] = traceTable
     return traceTable
 
-@jit
+# @jit
 def apply_density_loss(rho, n, m, eta):
     """Applies loss to an input density matrix and traces out loss modes
     rho: density matrix over lossy basis (including zero state)
@@ -221,7 +221,7 @@ def get_qd_loss_unitary(n,m,etas):
     qdLossUnitaryLookup[(n,m,etas)] = U
     return U
 
-@jit
+# @jit
 def apply_qd(rho, n, m, etas):
     sigma = expand_density(rho, n, m)
     U = get_qd_loss_unitary(n, m, etas)
