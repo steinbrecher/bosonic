@@ -1,6 +1,10 @@
 import numpy as np
 import itertools as it
-# from numba import jit
+try:
+    from numba import jit
+except ImportError:
+    def jit(x):
+        return x
 from ..aa_phi import aa_phi
 
 def mode_basis(numPhotons, numModes):
@@ -103,7 +107,7 @@ def single_loss_matrix(eta, i, j, m):
     M[j,i]=np.sqrt(eta)
     return M
 
-# @jit
+@jit
 def full_loss_matrix(eta, m):
     #multiply single loss matrices:
     ls = []
@@ -130,7 +134,7 @@ def get_loss_matrix(eta,n,m):
     lossMatrixLookup[(eta,n,m)] = UFock
     return UFock
 
-#@jit
+@jit
 def apply_loss(rho, eta, n, m):
     sigma = expand_density(rho, n, m)
     U = get_loss_matrix(eta, n, m)
@@ -166,7 +170,7 @@ def get_trace_table(n,m):
     traceTableLookup[(n,m)] = traceTable
     return traceTable
 
-# @jit
+@jit
 def apply_density_loss(rho, n, m, eta):
     """Applies loss to an input density matrix and traces out loss modes
     rho: density matrix over lossy basis (including zero state)
@@ -183,7 +187,13 @@ def apply_density_loss(rho, n, m, eta):
         rhoOut[ak,al] += sigma[k,l]
     return rhoOut
 
+pairsLookup = {}
+@jit
 def get_qd_mode_pairs(n,m):
+    try:
+        return pairsLookup[(n,m)]
+    except KeyError:
+        pass
     basis = lossy_fock_basis(n, 2*m, includeZero=True)
     pairs = np.zeros((m, 2), dtype=int)
     for i in xrange(m):
@@ -192,15 +202,12 @@ def get_qd_mode_pairs(n,m):
                 pairs[i,0] = j
             if state[i] == 0 and state[i+m] == 2:
                 pairs[i,1] = j
+    pairsLookup[(n,m)] = pairs
     return pairs
 
 ### Quantum dot nonlinearity functions below this ###
-qdLossUnitaryLookup = {}
+@jit
 def get_qd_loss_unitary(n,m,etas):
-    try:
-        return qdLossUnitaryLookup[(n,m,etas)]
-    except KeyError:
-        pass
     etas = np.array(etas)
     if etas.size == 1:
         etas = etas * np.ones(m)
@@ -218,7 +225,6 @@ def get_qd_loss_unitary(n,m,etas):
         U[k,k] = -(1 - 2*eta)
         U[j,k] = 2 * np.sqrt(eta * (1-eta))
         U[k,j] = 2 * np.sqrt(eta * (1-eta))
-    qdLossUnitaryLookup[(n,m,etas)] = U
     return U
 
 # @jit
