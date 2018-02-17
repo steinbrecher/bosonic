@@ -12,7 +12,7 @@ PACKAGES = find_packages(where="src")
 META_PATH = os.path.join("src", "bosonic", "__init__.py")
 KEYWORDS = []
 CLASSIFIERS = []
-INSTALL_REQUIRES = ["numpy", "numba"]
+INSTALL_REQUIRES = ["numpy"]
 
 NUMPY_INCLUDE = np.get_include()
 

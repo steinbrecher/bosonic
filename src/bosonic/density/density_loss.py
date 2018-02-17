@@ -84,7 +84,7 @@ def get_expansion_map(n, m):
     return expansionMap
 
 #@jit
-def expand_density(rho, n, m):
+def expand_density_for_loss(rho, n, m):
     """Expand a density matrix (assumed over a lossy fock basis) to twice as many modes
     """
     expansionMap = get_expansion_map(n, m)
@@ -136,7 +136,7 @@ def get_loss_matrix(eta,n,m):
 
 @jit
 def apply_loss(rho, eta, n, m):
-    sigma = expand_density(rho, n, m)
+    sigma = expand_density_for_loss(rho, n, m)
     U = get_loss_matrix(eta, n, m)
     return U.dot(sigma).dot(np.conj(U.T))
 
@@ -229,7 +229,7 @@ def get_qd_loss_unitary(n,m,etas):
 
 # @jit
 def apply_qd(rho, n, m, etas):
-    sigma = expand_density(rho, n, m)
+    sigma = expand_density_for_loss(rho, n, m)
     U = get_qd_loss_unitary(n, m, etas)
     sigma = U.dot(sigma).dot(np.conj(U.T))
     rhoOut = np.zeros(rho.shape, dtype=complex)
