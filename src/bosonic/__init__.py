@@ -1,6 +1,7 @@
-from __future__ import absolute_import, division, print_function
-from .aa_phi import aa_phi
+from __future__ import print_function, absolute_import, division
+from .aa_phi import build_norm_and_idxs, build_kIdxs, binom
 from . import density
+from .phi_dispatch import aa_phi, aa_phi_cpu, aa_phi_gpu
 
 __all__ = [
     "__title__", "__summary__", "__uri__", "__version__", "__author__",
@@ -16,4 +17,4 @@ __author__ = "Greg Steinbrecher"
 __email__ = "steinbrecher@alum.mit.edu"
 
 __license__ = "MIT"
-__copyright__ = "Copyright (c) 2017 Greg Steinbrecher"
+__copyright__ = "Copyright (c) 2017-2018 Greg Steinbrecher"

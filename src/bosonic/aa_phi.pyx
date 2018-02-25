@@ -10,14 +10,14 @@ cimport numpy as np
 
 # Fast implementations of factorial and binomial assuming integer inputs
 def factorial(int n):
-    cdef int answer = 1
+    cdef long long answer = 1
     for x in range(2, n+1):
         answer = answer * x
     return answer
 
 def binom(int n, int m):
-    cdef int numer = 1
-    cdef int denom = factorial(n-m)
+    cdef unsigned long long numer = 1
+    cdef unsigned long long denom = factorial(n-m)
     for x in range(m+1, n+1):
         numer = numer * x
     return numer // denom
@@ -390,7 +390,7 @@ def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
     if (n%2) == 1:
         sgn = -1
 
-    with nogil,parallel(num_threads=8):
+    with nogil,parallel(num_threads=12):
         # Note: malloc'd 2d arrays need to be accessed as a 1d array. 
         U_T = <complex *>malloc(sizeof(complex) * m * n)
         if U_T == NULL:
