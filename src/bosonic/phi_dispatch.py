@@ -43,7 +43,7 @@ class PhiDispatcher(object):
             return self.gpu(U, n)
 
 if gpu_avail:
-    print("Warning: bosonic could not set up GPU; falling back to all-CPU computation", file=sys.stderr)
     aa_phi = PhiDispatcher()
 else:
+    print("Warning: bosonic could not set up GPU; falling back to all-CPU computation", file=sys.stderr)
     aa_phi = aa_phi_cpu
