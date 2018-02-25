@@ -8,15 +8,17 @@ from .aa_phi import binom
 
 # Try to import cuda library & test
 gpu_avail = True
-#try:
-from .gpu_phi import GpuPhiDispatcher
-from .bosonic_util import haar_rand
+try:
+    from .gpu_phi import GpuPhiDispatcher
+    from .bosonic_util import haar_rand
 
-aa_phi_gpu = GpuPhiDispatcher()
-U = haar_rand(4)
-phiU_GPU = aa_phi_gpu(U,2)
-phiU_CPU = aa_phi_cpu(U,2)
-assert np.mean(np.abs(phiU_CPU - phiU_GPU)) < 1e-12
+    aa_phi_gpu = GpuPhiDispatcher()
+    U = haar_rand(4)
+    phiU_GPU = aa_phi_gpu(U,2)
+    phiU_CPU = aa_phi_cpu(U,2)
+    assert np.mean(np.abs(phiU_CPU - phiU_GPU)) < 1e-12
+except:
+    gpu_avail = False
     
 
 class PhiDispatcher(object):
@@ -41,6 +43,7 @@ class PhiDispatcher(object):
             return self.gpu(U, n)
 
 if gpu_avail:
+    print("Warning: bosonic could not set up GPU; falling back to all-CPU computation", file=sys.stderr)
     aa_phi = PhiDispatcher()
 else:
     aa_phi = aa_phi_cpu
