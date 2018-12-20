@@ -22,7 +22,7 @@ except:
     
 
 class PhiDispatcher(object):
-    estimatorCutoff = 1260
+    estimatorCutoff = 1732
     
     def __init__(self):
         self.gpu = aa_phi_gpu

@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import, division
-from .aa_phi import build_norm_and_idxs, build_kIdxs, binom
+from .aa_phi import aa_phi, aa_phi_lossy, aa_phi_restricted, build_norm_and_idxs, build_kIdxs, binom
 from . import density
-from .phi_dispatch import aa_phi, aa_phi_cpu, aa_phi_gpu
+#from .phi_dispatch import aa_phi, aa_phi_cpu, aa_phi_gpu
 
 __all__ = [
     "__title__", "__summary__", "__uri__", "__version__", "__author__",

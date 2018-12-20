@@ -6,7 +6,6 @@ import time
 from .aa_phi import build_norm_and_idxs, build_kIdxs
 
 from numba import cuda
-cuda.select_device(0)
 
 class GpuPhiDispatcher(object):
     lastNM = (None, None)
@@ -26,6 +25,15 @@ class GpuPhiDispatcher(object):
     
     lastTNorm = 0
     lastTSetup = 0
+
+    def __init__(self, dev=0):
+        self.cuda = cuda
+        self.select_device(dev)
+        self.stream = cuda.stream()
+
+    def select_device(self, dev):
+        self.cuda.close()
+        self.cuda.select_device(dev)
     
     def __call__(self, U, n):
         m = U.shape[0]
@@ -34,23 +42,26 @@ class GpuPhiDispatcher(object):
             t1 = time.time()
             self.lastNM = (n,m)
 
-            self.normalization, self.idxs = build_norm_and_idxs(n,m)
-            if n%2 == 1:
+            normalization, self.idxs = build_norm_and_idxs(n,m)
+            self.normalization = normalization.copy()
+
+            if n % 2 == 1:
                 self.normalization *= -1
+
             N = self.idxs.shape[0]
             self.N = N
 
             # Allocate mapped array for final result
-            self.phiU = cuda.mapped_array((N,N),dtype=np.complex128)
+            self.phiU = cuda.mapped_array((N,N), dtype=np.complex128, stream=self.stream)
 
             # Allocate array on device for computation
-            self.d_phiU = cuda.device_array((N,N), dtype=np.complex128)
+            self.d_phiU = cuda.device_array((N,N), dtype=np.complex128, stream=self.stream)
 
             # Copy idxs to the device
-            self.d_idxs = cuda.to_device(self.idxs)
+            self.d_idxs = cuda.to_device(self.idxs,stream=self.stream)
             
             # Copy normalization to the device
-            self.d_normalization = cuda.to_device(self.normalization.astype('complex128'))
+            self.d_normalization = cuda.to_device(self.normalization.astype('complex128'), stream=self.stream)
 
             # Set up call parameters
             blockspergrid_x = (N + (self.threadsperblock[0] - 1)) // self.threadsperblock[0]
@@ -62,15 +73,18 @@ class GpuPhiDispatcher(object):
             self.lastTSetup = time.time() - t1
     
         # Copy U to the device
-        d_U = cuda.to_device(U)
-
+        d_U = cuda.to_device(U,stream=self.stream)
+        
         # Run the computation
-        self.gpu_phi[self.blockspergrid,self.threadsperblock](d_U, self.d_phiU, self.d_normalization, self.d_idxs)
+        self.gpu_phi[self.blockspergrid,self.threadsperblock,self.stream](d_U, self.d_phiU, self.d_normalization, self.d_idxs)
+
+        self.stream.synchronize()
 
         # Move the results to the mapped array
-        self.d_phiU.copy_to_host(self.phiU)
+        self.d_phiU.copy_to_host(self.phiU, stream=self.stream)
+
+        self.stream.synchronize()
         
-        # Return final result
         return self.phiU
     
     def get_phi(self, n, m):
@@ -113,8 +127,8 @@ class GpuPhiDispatcher(object):
                             rowSum += U_ST[i,j]
                     rowSumProd *= rowSum
                 perm += rowSumProd
-                
             phiU[row, col] = perm / normalization[row, col]
-        
+            
+            
         self.gpuPhis[(m,n)] = gpu_phi
         return gpu_phi

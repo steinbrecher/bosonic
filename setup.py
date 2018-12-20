@@ -48,8 +48,9 @@ ext_modules = [
     Extension(
         "bosonic.aa_phi",
         ["src/bosonic/aa_phi.pyx"],
-        extra_compile_args=['-fopenmp', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
-        extra_link_args=['-fopenmp', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
+        extra_compile_args=['-Ofast', '-march=native', '-flto', '-funroll-loops', '-fopenmp', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
+        #extra_compile_args=['-O3', '-march=native', '-flto', '-fopenmp', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
+        extra_link_args=['-fopenmp', '-flto', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
     )
 ]
 

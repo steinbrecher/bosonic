@@ -68,6 +68,17 @@ def basis_size(int n, int m):
     basis_size_cache[(n,m)] = numer // denom
     return numer // denom
 
+lossy_basis_size_cache = dict()
+def lossy_basis_size(int n, int m):
+    if (n,m) in lossy_basis_size_cache:
+        return lossy_basis_size_cache[(n,m)]
+    cdef size_t i
+    cdef size_t basisSize = 0
+    for i in range(n+1):
+        basisSize += basis_size(i,m)
+    lossy_basis_size_cache[(n,m)] = basisSize
+    return basisSize
+
 # Memoized function to build the basis efficiently
 # Note: basis is a numpy array here, not a list of lists as fock_basis
 # returns
@@ -312,6 +323,27 @@ def permanent(np.ndarray[np.complex128_t, ndim=2] a):
         p *= -1
     return p
 
+# Calculate the block-diagonal version of phi over the lossy basis
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def aa_phi_lossy(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
+    assert U.dtype == np.complex128
+    cdef size_t m = U.shape[0]
+    cdef size_t N = lossy_basis_size(n,m)
+    cdef np.ndarray[np.complex128_t, ndim=2] S = np.eye(N, dtype=np.complex128)
+
+    cdef size_t nn = n
+    cdef size_t count = 0
+    cdef size_t NN
+   
+    while nn > 0:
+        NN = basis_size(nn, m)
+        phiU = aa_phi(U,nn)
+        S[count:count+NN, count:count+NN] = phiU
+        nn -= 1
+        count += NN
+    return S
+
 # Improvement of the threaded version of aa_phi to take advantage of
 # iterating in gray code order (i.e. the rowsums only change by one
 # element of U_ST for each k, so we can save them and update accordingly)
@@ -390,7 +422,7 @@ def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
     if (n%2) == 1:
         sgn = -1
 
-    with nogil,parallel(num_threads=12):
+    with nogil,parallel(num_threads=16):
         # Note: malloc'd 2d arrays need to be accessed as a 1d array. 
         U_T = <complex *>malloc(sizeof(complex) * m * n)
         if U_T == NULL:
@@ -451,6 +483,161 @@ def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
                 # rather than explicitly doing it elementwise) but seems
                 # to be more efficient this way w/ threads.
                 phiU[row, col] = sgn * perm / normalization[row, col]
+        free(U_T)
+        free(U_ST)
+        free(rowSums)
+    
+    return phiU 
+
+# Improvement of the threaded version of aa_phi to take advantage of
+# iterating in gray code order (i.e. the rowsums only change by one
+# element of U_ST for each k, so we can save them and update accordingly)
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def aa_phi_restricted(np.ndarray[np.complex128_t, ndim=2] U, size_t n, 
+                      np.ndarray[np.int_t, ndim=1] idxIn, np.ndarray[np.int_t, ndim=1] idxOut):
+    """Computes multi-particle unitary for a given number of photons
+
+    Parameters
+    ----------
+    U : array of complex
+        Single-photon unitary to be transformed
+    n : int
+        Number of photons to compute unitary for
+    idxIn : array of int
+            Indices of input states
+    idxOut : array of int
+             Indices of output states
+
+    Returns
+    -------
+    array of complex128
+        Multiparticle unitary over the fock basis. 
+
+    See Also
+    -------
+    fock_basis : Generates fock basis for `n` photons over `m` modes
+
+    Notes
+    -----
+    The computational complexity of this function is not for the 
+    faint of heart. Specifically it goes as :math:`O(Choose[n+m-1,n] * n * 2^n)`
+    where `m` is dimensionality of `U` and `n` is the number of photons.
+
+    References
+    ----------
+    [1] Aaronson, Scott, and Alex Arkhipov. "The computational 
+    complexity of linear optics." In Proceedings of the forty-third 
+    annual ACM symposium on Theory of computing, pp. 333-342. ACM, 2011.
+    """
+    assert U.dtype == np.complex128
+    cdef size_t m = U.shape[0]
+    cdef size_t N = basis_size(n, m)
+
+    cdef size_t row, col, rowId, colId
+
+    cdef size_t i, j, I, J
+
+    cdef int k 
+    cdef int sgn = 1
+    cdef complex rowsum = 0
+    cdef complex rowsumprod
+    cdef complex perm = 1
+
+    cdef complex* U_T
+    cdef complex* U_ST
+    cdef complex* rowsums
+
+    cdef int numIn = idxIn.size
+    cdef int numOut = idxOut.size
+    
+    cdef np.ndarray[np.complex128_t, ndim=2] phiU = np.empty([numOut, numIn], dtype=np.complex128)
+    
+    cdef np.ndarray[np.double_t, ndim=2] normalization
+    cdef np.ndarray[np.int_t, ndim=2] idxs
+    
+    cdef np.ndarray[np.int_t, ndim=1] kIdxs 
+    cdef np.ndarray[np.int_t, ndim=1] kSgns 
+    cdef int kIdx
+    cdef int kSgn
+
+    # Get the indexes of which element of the gray code changes each
+    # iteration. Only run this once per n, so it's wrapped into its own
+    # function with a dictionary memoization.
+    kIdxs, kSgns = build_kIdxs(n)
+    # Get normalization matrix for phi(U) and indexes of which elements
+    # of U map to elements of U_T and U_ST (see function for more
+    # details)
+    normalization, idxs = build_norm_and_idxs(n, m)
+    # If n is odd, we flip the sign of the permanents. More efficient
+    # to flip the sign of the normalizations since we have to divide by
+    # it later anyway
+    if (n%2) == 1:
+        sgn = -1
+
+    with nogil,parallel(num_threads=12):
+        # Note: malloc'd 2d arrays need to be accessed as a 1d array. 
+        U_T = <complex *>malloc(sizeof(complex) * m * n)
+        if U_T == NULL:
+            abort()
+        U_ST = <complex *>malloc(sizeof(complex) * n * n)
+        if U_ST == NULL:
+            abort()
+        rowSums = <complex*>malloc(sizeof(complex) * n)
+        if rowSums == NULL:
+            abort()
+            
+        for colId in prange(numIn, schedule='dynamic'):
+            col = idxIn[colId]
+            # Populate U_T once per column
+            for j in range(n):
+                J = idxs[col,j]
+                for i in range(m):
+                    U_T[i + j*m] = U[i,J]
+
+            for rowId in range(numOut):
+                row = idxOut[rowId]
+                # Populate U_ST for each row
+                for i in range(n):
+                    I = idxs[row,i]
+                    for j in range(n):
+                        U_ST[i + j*n] = U_T[I + j*m]
+
+                # Calculate permanent of U_ST
+                perm = 0
+                
+                # Initialize the rowSums to 0 for the permanent
+                memset(rowSums, 0, n * sizeof(complex))
+
+                # Iterate over all the set combinations (whee exponential algorithms)
+                # Don't have to start at 0 since gray(0) = 0, i.e. there
+                # are no bits set and thus no elements included.
+                for k in range(1,2**n):
+                    # Slightly more efficient to write these to a local variable
+                    # for rapid access
+                    kIdx = kIdxs[k]
+                    kSgn = kSgns[k]
+                    
+                    # Update the rowSums, adding if sgn is 1, subtracting otherwise
+                    for i in range(n):
+                        rowSums[i] = rowSums[i] + kSgn * U_ST[i + kIdx*n]
+                        
+                    # Set rowsumprod to 1 for even k, -1 for odd k
+                    rowsumprod = 1 - 2 * (k % 2)
+                    
+                    # Compute product over the rowsums
+                    for i in range(n):
+                        rowsumprod = rowsumprod * rowSums[i]
+                    
+                    # Collect the permanent sum
+                    perm = perm + rowsumprod
+                    
+                # Save the permanent to its entry of phiU, divdided
+                # by normalization constant. Without threads, division is
+                # better done at the final return (dividing the matrices
+                # rather than explicitly doing it elementwise) but seems
+                # to be more efficient this way w/ threads.
+                phiU[rowId, colId] = sgn * perm / normalization[row, col]
         free(U_T)
         free(U_ST)
         free(rowSums)
