@@ -4,17 +4,20 @@ import numpy as np
 import itertools as it
 from libc.stdlib cimport abort, malloc, free
 from libc.string cimport memset
+from .bosonic_util import memoize
 
 # Needed for compile-time information about numpy
 cimport numpy as np
 
 # Fast implementations of factorial and binomial assuming integer inputs
+@memoize
 def factorial(int n):
     cdef long long answer = 1
     for x in range(2, n+1):
         answer = answer * x
     return answer
 
+@memoize
 def binom(int n, int m):
     cdef unsigned long long numer = 1
     cdef unsigned long long denom = factorial(n-m)
@@ -22,6 +25,7 @@ def binom(int n, int m):
         numer = numer * x
     return numer // denom
 
+@memoize
 def mode_basis(numPhotons, numModes):
     """Generates the mode basis as a list of tuples of length numPhotons
     Each tuple is of the form (mode that photon 1 is in, mode that photon
@@ -30,16 +34,12 @@ def mode_basis(numPhotons, numModes):
     return list(it.combinations_with_replacement(range(numModes), numPhotons))
 
 # Fock basis generation for number of photons & modes
-fock_basis_lookup = {}
+@memoize
 def fock_basis(numPhotons, numModes):
     """Generates the fock basis as a list of lists of length numModes
     The list is choose(numPhotons+numModes-1, numPhotons) long and in the
     order [(numPhotons, 0,...,0), (numPhotons-1, 1, 0, ..., 0), ...].
     """
-    try:
-        return fock_basis_lookup[(numPhotons, numModes)]
-    except KeyError:
-        pass
     modeBasisList = mode_basis(numPhotons, numModes)
     ls = []
     for element in modeBasisList:
@@ -48,49 +48,43 @@ def fock_basis(numPhotons, numModes):
             loc_count = element.count(i)
             ks.append(loc_count)
         ls.append(ks)
-    fock_basis_lookup[(numPhotons, numModes)] = ls
     return ls
+
+@memoize
+def lossy_fock_basis(numPhotons, numModes):
+    basis = []
+    for j in range(numPhotons, 0, -1):
+        basis.extend(fock_basis(j, numModes))
+    basis.extend([numModes*[0],])
+    return basis
 
 # Computes binomial(m+n-1, n)
 # This is ~5x faster than using scipy.special.binom oddly enough
-basis_size_cache = {}
+@memoize
 def basis_size(int n, int m):
-    try:
-        return basis_size_cache[(n,m)]
-    except KeyError:
-        pass
     cdef int top = n + m - 1
     cdef int numer = 1
     cdef int denom = 1
     for i in range(1, n+1):
         numer = numer * (top + 1 - i)
         denom = denom * i
-    basis_size_cache[(n,m)] = numer // denom
     return numer // denom
 
-lossy_basis_size_cache = dict()
+@memoize
 def lossy_basis_size(int n, int m):
-    if (n,m) in lossy_basis_size_cache:
-        return lossy_basis_size_cache[(n,m)]
     cdef size_t i
     cdef size_t basisSize = 0
     for i in range(n+1):
         basisSize += basis_size(i,m)
-    lossy_basis_size_cache[(n,m)] = basisSize
     return basisSize
 
 # Memoized function to build the basis efficiently
 # Note: basis is a numpy array here, not a list of lists as fock_basis
 # returns
-basis_cache = {}
+@memoize
 def build_basis(int n, int m):
-    try:
-        return basis_cache[(n,m)]
-    except KeyError:
-        pass
     cdef int N = basis_size(n, m)
     cdef np.ndarray basis = np.array(fock_basis(n, m), dtype=np.int)
-    basis_cache[(n,m)] = basis
     return basis
 
 def fock_to_idx(np.ndarray[np.int_t, ndim=1] S, int n):
@@ -111,12 +105,8 @@ def fock_to_idx(np.ndarray[np.int_t, ndim=1] S, int n):
 
 # This stuff only gets run once per basis (dim of U and # of photons)
 # so may as well cache all of it
-norm_and_idx_cache = {}
+@memoize
 def build_norm_and_idxs(int n, int m):
-    try:
-        return norm_and_idx_cache[(n,m)]
-    except KeyError:
-        pass
     cdef np.ndarray basis = build_basis(n, m)
     cdef int N = basis_size(n, m)
     cdef np.ndarray[np.double_t, ndim=1] factProducts = np.zeros([N, ], dtype=np.double)
@@ -132,13 +122,8 @@ def build_norm_and_idxs(int n, int m):
         factProducts[i] = np.sqrt(product)
         
         idxs[i] = fock_to_idx(S, n)
-    normalization = np.outer(factProducts, factProducts)        
-        
-    norm_and_idx_cache[(n,m)] = (normalization, idxs)
-    lastResult = (normalization, idxs)
+    normalization = np.outer(factProducts, factProducts)
     return (normalization, idxs)
-
-
 
 cimport cython
 @cython.boundscheck(False) # turn off bounds-checking for entire function

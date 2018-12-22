@@ -1,5 +1,13 @@
 import numpy as np
 
+def memoize(f):
+    memory = dict()
+    def decorated(*args):
+        if args not in memory:
+            memory[args] = f(*args)
+        return memory[args]
+    return decorated
+
 def haar_rand(m):
     """Returns haar-random matrix of dimension m x m
     The haar-random algorithm is taken from this paper:

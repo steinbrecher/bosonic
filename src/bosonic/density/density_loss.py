@@ -5,48 +5,14 @@ try:
 except ImportError:
     def jit(x):
         return x
-from ..aa_phi import aa_phi
-
-def mode_basis(numPhotons, numModes):
-    """Generates the mode basis as a list of tuples of length numPhotons
-    Each tuple is of the form (mode that photon 1 is in, mode that photon
-    2 is in, ..., mode that photon numPhotons is in)
-    """
-    return list(it.combinations_with_replacement(range(numModes), numPhotons))
-
-fock_basis_lookup = {}
-def fock_basis(numPhotons, numModes):
-    """Generates the fock basis as a list of lists of length numModes
-    The list is choose(numPhotons+numModes-1, numPhotons) long and in the
-    order [(numPhotons, 0,...,0), (numPhotons-1, 1, 0, ..., 0), ...].
-    """
-    try:
-        return fock_basis_lookup[(numPhotons, numModes)]
-    except KeyError:
-        pass
-    modeBasisList = mode_basis(numPhotons, numModes)
-    ls = []
-    for element in modeBasisList:
-        ks = []
-        for i in range(numModes):
-            loc_count = element.count(i)
-            ks.append(loc_count)
-        ls.append(ks)
-    fock_basis_lookup[(numPhotons, numModes)] = ls
-    return ls
-
-def lossy_fock_basis(numPhotons, numModes,includeZero=False):
-    basis = []
-    for j in range(numPhotons, 0, -1):
-        basis.extend(fock_basis(j, numModes))
-    if includeZero:
-        basis.extend([numModes*[0],])
-    return basis
+from ..aa_phi import aa_phi, lossy_fock_basis
+from ..bosonic_util import memoize
 
 # Step 1 functions
+@memoize
 def get_pair_table(n, m):
-    inputBasis = lossy_fock_basis(n, m, includeZero=True)
-    expandedBasis = lossy_fock_basis(n, 2*m, includeZero=True)
+    inputBasis = lossy_fock_basis(n, m)
+    expandedBasis = lossy_fock_basis(n, 2*m)
     pairLookupTable = np.zeros((len(expandedBasis), 2), dtype=int)
     d = len(inputBasis[0])
 
@@ -63,15 +29,10 @@ def get_pair_table(n, m):
                 pairLookupTable[i,1] = j
     return pairLookupTable
 
-expansionMapLookup = {}
+@memoize
 def get_expansion_map(n, m):
-    # Memoize this function
-    try:
-        return expansionMapLookup[(n,m)]
-    except KeyError:
-        pass
-    inputBasis = lossy_fock_basis(n, m, includeZero=True)
-    expandedBasis = lossy_fock_basis(n, 2*m, includeZero=True)
+    inputBasis = lossy_fock_basis(n, m)
+    expandedBasis = lossy_fock_basis(n, 2*m)
     pairLookupTable = get_pair_table(n, m)
     zeroStateIdx = len(inputBasis)-1
 
@@ -80,7 +41,6 @@ def get_expansion_map(n, m):
         for j in xrange(pairLookupTable.shape[0]):
             if pairLookupTable[j,0] == i and pairLookupTable[j,1] == zeroStateIdx:
                 expansionMap[i] = j
-    expansionMapLookup[(n,m)] = expansionMap
     return expansionMap
 
 #@jit
@@ -97,7 +57,7 @@ def expand_density_for_loss(rho, n, m):
     return sigma
 
 # Step 2 functions
-# @jit
+@memoize
 def single_loss_matrix(eta, i, j, m):
     #gives a loss matrix between modes i,j for loss eta (i.e. T=1-eta)
     M = np.eye(2*m, dtype=complex)
@@ -107,7 +67,7 @@ def single_loss_matrix(eta, i, j, m):
     M[j,i]=np.sqrt(eta)
     return M
 
-@jit
+@memoize
 def full_loss_matrix(eta, m):
     #multiply single loss matrices:
     ls = []
@@ -115,14 +75,9 @@ def full_loss_matrix(eta, m):
         ls.append(single_loss_matrix(eta, i, m+i, m))
     return reduce(np.dot, ls)
 
-lossMatrixLookup = {}
-def get_loss_matrix(eta,n,m):
-    try:
-        return lossMatrixLookup[(eta,n,m)]
-    except KeyError:
-        pass
-
-    N = len(lossy_fock_basis(n,2*m,includeZero=True))
+@memoize
+def get_loss_matrix(eta, n, m):
+    N = len(lossy_fock_basis(n, 2*m))
     U = full_loss_matrix(eta, m)
     UFock = np.eye(N, dtype=complex)
     count = 0
@@ -131,7 +86,6 @@ def get_loss_matrix(eta,n,m):
         NHere = UHere.shape[0]
         UFock[count:count+NHere, count:count+NHere] = UHere
         count += NHere
-    lossMatrixLookup[(eta,n,m)] = UFock
     return UFock
 
 @jit
@@ -140,14 +94,8 @@ def apply_loss(rho, eta, n, m):
     U = get_loss_matrix(eta, n, m)
     return U.dot(sigma).dot(np.conj(U.T))
 
-traceTableLookup = {}
-#@jit
-def get_trace_table(n,m):
-    try:
-        return traceTableLookup[(n,m)]
-    except KeyError:
-        pass
-
+@memoize
+def get_trace_table(n, m):
     pairTable = get_pair_table(n,m)
     N = pairTable.shape[0]
     A = pairTable[:,0]
@@ -167,7 +115,6 @@ def get_trace_table(n,m):
     for i in xrange(len(klPairs)):
         traceTable[i,:2] = klPairs[i]
         traceTable[i,2:] = aPairs[i]
-    traceTableLookup[(n,m)] = traceTable
     return traceTable
 
 @jit
@@ -187,14 +134,9 @@ def apply_density_loss(rho, n, m, eta):
         rhoOut[ak,al] += sigma[k,l]
     return rhoOut
 
-pairsLookup = {}
-@jit
-def get_qd_mode_pairs(n,m):
-    try:
-        return pairsLookup[(n,m)]
-    except KeyError:
-        pass
-    basis = lossy_fock_basis(n, 2*m, includeZero=True)
+@memoize
+def get_qd_mode_pairs(n, m):
+    basis = lossy_fock_basis(n, 2*m)
     pairs = np.zeros((m, 2), dtype=int)
     for i in xrange(m):
         for j,state in enumerate(basis):
@@ -202,12 +144,11 @@ def get_qd_mode_pairs(n,m):
                 pairs[i,0] = j
             if state[i] == 0 and state[i+m] == 2:
                 pairs[i,1] = j
-    pairsLookup[(n,m)] = pairs
     return pairs
 
 ### Quantum dot nonlinearity functions below this ###
-@jit
-def get_qd_loss_unitary(n,m,etas):
+@memoize
+def get_qd_loss_unitary(n, m, etas):
     etas = np.array(etas)
     if etas.size == 1:
         etas = etas * np.ones(m)
@@ -216,7 +157,7 @@ def get_qd_loss_unitary(n,m,etas):
     else:
         raise ValueError("etas must be a single number or have length equal to m")
     pairs = get_qd_mode_pairs(n, m)
-    N = len(lossy_fock_basis(n, 2*m, includeZero=True))
+    N = len(lossy_fock_basis(n, 2*m))
     U = np.eye(N, dtype=complex)
     for i in xrange(m):
         eta = etas[i]
