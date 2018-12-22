@@ -16,10 +16,11 @@ INSTALL_REQUIRES = ["numpy"]
 
 NUMPY_INCLUDE = np.get_include()
 
-## Import metadata from src/bosonic/__init__.py
-## This is taken from:
+# Import metadata from src/bosonic/__init__.py
+# This is taken from:
 # https://hynek.me/articles/sharing-your-labor-of-love-pypi-quick-and-dirty/
 HERE = os.path.abspath(os.path.dirname(__file__))
+
 
 def read(*parts):
     """
@@ -29,7 +30,9 @@ def read(*parts):
     with codecs.open(os.path.join(HERE, *parts), "rb", "utf-8") as f:
         return f.read()
 
+
 META_FILE = read(META_PATH)
+
 
 def find_meta(meta):
     """
@@ -43,22 +46,36 @@ def find_meta(meta):
         return meta_match.group(1)
     raise RuntimeError("Unable to find __{meta}__ string.".format(meta=meta))
 
-## Declare aa_phi as an external module so it gets compiled
+
+# TODO: Make this compile on multiple platforms nicely
+# extra_compile_args=['-O3', '-march=native', '-flto', '-fopenmp',
+#                     '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
+extra_compile_args = ['-Ofast', '-march=native', '-flto', '-funroll-loops',
+                      '-fopenmp', '-static-libgcc',
+                      '-I{}'.format(NUMPY_INCLUDE)]
+extra_link_args = ['-fopenmp', '-flto',
+                   '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)]
+# Declare aa_phi and fock as external modules so they get compiled
 ext_modules = [
+    Extension(
+        "bosonic.fock",
+        ["src/bosonic/fock.pyx"],
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
+    ),
     Extension(
         "bosonic.aa_phi",
         ["src/bosonic/aa_phi.pyx"],
-        extra_compile_args=['-Ofast', '-march=native', '-flto', '-funroll-loops', '-fopenmp', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
-        #extra_compile_args=['-O3', '-march=native', '-flto', '-fopenmp', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
-        extra_link_args=['-fopenmp', '-flto', '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
-    )
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
+    ),
 ]
 
 VERSION = find_meta("version")
 URL = find_meta("url")
 LONG = (
     read("README.rst")
-    )
+)
 
 
 if __name__ == '__main__':
@@ -79,4 +96,4 @@ if __name__ == '__main__':
         package_dir={"": "src"},
         zip_safe=False,
         install_requires=INSTALL_REQUIRES,
-        )
+    )

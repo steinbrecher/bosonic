@@ -10,7 +10,7 @@ from .aa_phi import binom
 gpu_avail = True
 try:
     from .gpu_phi import GpuPhiDispatcher
-    from .bosonic_util import haar_rand
+    from .util import haar_rand
 
     aa_phi_gpu = GpuPhiDispatcher()
     U = haar_rand(4)

@@ -1,12 +1,11 @@
+from __future__ import print_function, absolute_import, division
+
 import numpy as np
-try:
-    from numba import jit, complex128, int64
-except ImportError:
-    def jit(x):
-        return x
 from .density_loss import lossy_fock_basis
-from ..bosonic_util import memoize
-from ..aa_phi import lossy_basis_size
+from ..util import memoize
+from ..fock import lossy_basis_size
+from ..nonlinear import build_fock_nonlinear_layer
+
 
 @memoize
 def get_expansion_modes(n, m, newPhotons):
@@ -22,6 +21,7 @@ def get_expansion_modes(n, m, newPhotons):
     assert len(expansionModes) == len(basis)
     return expansionModes
 
+
 def add_mode(rho, n, m, newPhotons=0):
     expansionModes = get_expansion_modes(n, m, newPhotons)
     N = lossy_basis_size(n + newPhotons, m + 1)
@@ -31,6 +31,7 @@ def add_mode(rho, n, m, newPhotons=0):
             sigma[l, m] = rho[i, j]
     return sigma
 
+
 @memoize
 def get_reverse_basis_lookup(n, m):
     lookup = dict()
@@ -39,10 +40,10 @@ def get_reverse_basis_lookup(n, m):
         lookup[tuple(state)] = i
     return lookup
 
+
 @memoize
 def get_deletion_mapping(n, m, d):
     inputBasis = lossy_fock_basis(n, m)
-    outputBasis = lossy_fock_basis(n, m-1)
     outputBasisLookup = get_reverse_basis_lookup(n, m-1)
     N = len(inputBasis)
     mapping = []
@@ -63,6 +64,7 @@ def get_deletion_mapping(n, m, d):
             mapping.append((ak, al, k, l))
     return mapping
 
+
 def delete_mode(rho, n, m, d):
     NOut = lossy_basis_size(n, m-1)
     sigma = np.zeros((NOut, NOut), dtype=complex)
@@ -71,4 +73,11 @@ def delete_mode(rho, n, m, d):
     return sigma
 
 
+def apply_nonlinear(rho, theta, numPhotons, numModes):
+    U = build_fock_nonlinear_layer(
+        numPhotons, numModes, theta, includeZero=True)
+    return U.dot(rho).dot(np.conj(U.T))
 
+
+def apply_U(rho, U):
+    return U.dot(rho).dot(np.conj(U.T))
