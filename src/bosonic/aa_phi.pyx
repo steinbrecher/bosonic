@@ -1,4 +1,5 @@
-from __future__ import division
+from cython.parallel cimport prange, parallel
+from __future__ import print_function, absolute_import, division
 
 import numpy as np
 from libc.stdlib cimport abort, malloc, free
@@ -12,10 +13,13 @@ cimport numpy as np
 # Memoized function to build the basis efficiently
 # Note: basis is a numpy array here, not a list of lists as fock_basis
 # returns
+
+
 @memoize
 def build_basis(int n, int m):
-    cdef np.ndarray[np.int_t, ndim=2] basis = np.array(fock_basis(n, m), dtype=np.int)
+    cdef np.ndarray[np.int_t, ndim= 2] basis = np.array(fock_basis(n, m), dtype=np.int)
     return basis
+
 
 def fock_to_idx(np.ndarray[np.int_t, ndim=1] S, int n):
     """Converts fock state S to list with s_i copies of the number i
