@@ -1,5 +1,8 @@
+from __future__ import print_function, absolute_import, division
+
 import numpy as np
 from .fock import fock_basis, lossy_fock_basis
+
 
 def expi(x):
     if x == np.pi:
@@ -8,17 +11,19 @@ def expi(x):
         return complex(1)
     return np.exp(1j * x)
 
-def build_fock_nonlinear_layer(numPhotons, numModes, theta, lossy=False, includeZero=False):
+
+def build_fock_nonlinear_layer(numPhotons, numModes, theta, lossy=False,
+                               includeZero=True):
     """Build a kerr-nonlinear layer in the fock basis
     Inputs:
         numPhotons: number of photons
         numModes: number of optical modes
-        theta: Either a single phase or an array of per-site phases 
-               indicating the strength of the nonlinearity
+        theta: Either a single phase or an array of per-site
+               phases indicating the strength of the nonlinearity
 
-    Returns: 
+    Returns:
         Matrix corresponding to a chi-2 nonlinearity of strength theta
-    
+
     The matrix is an identity transform for any state with at most one photon
     per mode. States with more than one photon per mode pick up a factor of
     e^{i*theta} for each extra photon. So |2, 1, 0, 0> picks up a factor
@@ -29,24 +34,27 @@ def build_fock_nonlinear_layer(numPhotons, numModes, theta, lossy=False, include
     theta = np.array(theta)
     if theta.size == 1:
         if lossy:
-            return build_lossy_fock_nonlinear_layer_constant(numPhotons, numModes, theta, includeZero=includeZero)
+            return build_lossy_fock_nonlinear_layer_constant(
+                numPhotons, numModes, theta, includeZero=includeZero)
         return build_fock_nonlinear_layer_constant(numPhotons, numModes, theta)
     if theta.size == numModes:
         if lossy:
-            raise NotImplementedError("Lossy layer with variable nonlinearity not yet implemented")
+            raise NotImplementedError(
+                "Lossy layer with variable nonlinearity not yet implemented")
         return build_fock_nonlinear_layer_variable(numPhotons, numModes, theta)
     else:
         raise IOError(
-            "Theta must be either a single number or an array with size numModes")
+            "Theta must be a single number or an array of size numModes")
+
 
 def build_fock_nonlinear_layer_variable(numPhotons, numModes, theta):
     basis = fock_basis(numPhotons, numModes)
     N = len(basis)
     A = np.eye(N, dtype=complex)
-    for i,state in enumerate(basis):
+    for i, state in enumerate(basis):
         # Convert state to an array
         s = np.array(state)
-        
+
         # Calculate phase of the nonlinearity
         phase = 0
         for j in xrange(numModes):
@@ -54,62 +62,63 @@ def build_fock_nonlinear_layer_variable(numPhotons, numModes, theta):
                 phase += s[j] * (s[j]-1) * theta[j] / 2
 
         # Update A
-        A[i,i] = expi(phase)
+        A[i, i] = expi(phase)
     return A
-    
+
+
 def build_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
     basis = fock_basis(numPhotons, numModes)
     N = len(basis)
     A = np.eye(N, dtype=complex)
-    for i,state in enumerate(basis):
+    for i, state in enumerate(basis):
         # Convert state to an array
         s = np.array(state)
-        
+
         # Set all modes with zero or one photons equal to zero
         s -= 1
-        s[s<=0] = 0
-        
+        s[s <= 0] = 0
+
         # Calculate phase of the nonlinearity
         phase = np.sum(s) * theta
 
         # Update A
-        A[i,i] = expi(phase)
+        A[i, i] = expi(phase)
     return A
 
-def build_lossy_fock_nonlinear_layer_constant(numPhotons, numModes, theta, includeZero=False):
+
+def build_lossy_fock_nonlinear_layer_constant(numPhotons, numModes, theta,
+                                              includeZero=True):
     basis = lossy_fock_basis(numPhotons, numModes, includeZero=includeZero)
     N = len(basis)
     A = np.eye(N, dtype=complex)
-    for i,state in enumerate(basis):
+    for i, state in enumerate(basis):
         # Convert state to an array
         s = np.array(state)
-        
+
         # Set all modes with zero or one photons equal to zero
         s -= 1
-        s[s<=0] = 0
-        
+        s[s <= 0] = 0
+
         # Calculate phase of the nonlinearity
         phase = np.sum(s) * theta
 
         # Update A
-        A[i,i] = expi(phase)
+        A[i, i] = expi(phase)
     return A
-
 
 
 # Test that this works for two photons in four modes
 _A = np.eye(10, dtype=complex)
 theta = np.pi
-_A[0,0] = expi(theta)
-_A[4,4] = expi(theta)
-_A[7,7] = expi(theta)
-_A[9,9] = expi(theta)
+_A[0, 0] = expi(theta)
+_A[4, 4] = expi(theta)
+_A[7, 7] = expi(theta)
+_A[9, 9] = expi(theta)
 
 _Atest = build_fock_nonlinear_layer(2, 4, theta)
 _diff = np.sum(np.ravel(np.abs(_A - _Atest)**2))
 try:
     assert _diff < 1e-16
 except AssertionError as e:
-    print "Error: build_fock_nonlinear_layer did not produce the correct transform for 2 photons in 4 modes"
+    print("Error: build_fock_nonlinear_layer is broken")
     raise e
-
