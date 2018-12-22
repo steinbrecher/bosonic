@@ -19,12 +19,12 @@ def get_expansion_modes(n, m, newPhotons):
         for j, eState in enumerate(expandedBasis):
             if tuple(extendedState) == tuple(eState):
                 expansionModes.append(j)
-    assert len(expansionLookup) == len(basis)
+    assert len(expansionModes) == len(basis)
     return expansionModes
 
 def add_mode(rho, n, m, newPhotons=0):
-    expansionModes = get_expansion(n, m, newPhotons)
-    N = len(lossy_fock_basis(n+newPhotons, m+1))
+    expansionModes = get_expansion_modes(n, m, newPhotons)
+    N = lossy_basis_size(n + newPhotons, m + 1)
     sigma = np.zeros((N, N), dtype=complex)
     for i, l in enumerate(expansionModes):
         for j, m in enumerate(expansionModes):
@@ -65,10 +65,10 @@ def get_deletion_mapping(n, m, d):
 
 def delete_mode(rho, n, m, d):
     NOut = lossy_basis_size(n, m-1)
-    rhoOut = np.zeros((NOut, NOut), dtype=complex)
+    sigma = np.zeros((NOut, NOut), dtype=complex)
     for ak, al, k, l in get_deletion_mapping(n, m, d):
-        rhoOut[ak, al] += rho[k, l]
-    return rhoOut
+        sigma[ak, al] += rho[k, l]
+    return sigma
 
 
 
