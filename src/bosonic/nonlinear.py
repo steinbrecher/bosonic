@@ -48,7 +48,7 @@ def build_fock_nonlinear_layer(numPhotons, numModes, theta, lossy=False):
             "Theta must be a single number or an array of size numModes")
 
 
-@memoize
+# @memoize
 def build_fock_nonlinear_layer_variable(numPhotons, numModes, theta):
     basis = fock_basis(numPhotons, numModes)
     N = len(basis)
@@ -68,7 +68,7 @@ def build_fock_nonlinear_layer_variable(numPhotons, numModes, theta):
     return A
 
 
-@memoize
+# @memoize
 def build_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
     basis = fock_basis(numPhotons, numModes)
     N = len(basis)
@@ -89,7 +89,7 @@ def build_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
     return A
 
 
-@memoize
+# @memoize
 def build_lossy_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
     basis = lossy_fock_basis(numPhotons, numModes)
     N = len(basis)
