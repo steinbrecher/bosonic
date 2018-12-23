@@ -7,15 +7,15 @@ except ImportError:
     def jit(x):
         return x
 from ..aa_phi import aa_phi
-from ..fock import lossy_fock_basis
+from ..fock import lossy_basis, lossy_basis_size
 from ..util import memoize
 
 
 # Step 1 functions
 @memoize
 def get_pair_table(n, m):
-    inputBasis = lossy_fock_basis(n, m)
-    expandedBasis = lossy_fock_basis(n, 2*m)
+    inputBasis = lossy_basis(n, m)
+    expandedBasis = lossy_basis(n, 2*m)
     pairLookupTable = np.zeros((len(expandedBasis), 2), dtype=int)
     d = len(inputBasis[0])
 
@@ -35,7 +35,7 @@ def get_pair_table(n, m):
 
 @memoize
 def get_expansion_map(n, m):
-    inputBasis = lossy_fock_basis(n, m)
+    inputBasis = lossy_basis(n, m)
     pairLookupTable = get_pair_table(n, m)
     zeroStateIdx = len(inputBasis)-1
 
@@ -86,7 +86,7 @@ def full_loss_matrix(eta, m):
 
 @memoize
 def get_loss_matrix(eta, n, m):
-    N = len(lossy_fock_basis(n, 2*m))
+    N = lossy_basis_size(n, 2*m)
     U = full_loss_matrix(eta, m)
     UFock = np.eye(N, dtype=complex)
     count = 0
@@ -149,7 +149,7 @@ def apply_density_loss(rho, n, m, eta):
 
 @memoize
 def get_qd_mode_pairs(n, m):
-    basis = lossy_fock_basis(n, 2*m)
+    basis = lossy_basis(n, 2*m)
     pairs = np.zeros((m, 2), dtype=int)
     for i in xrange(m):
         for j, state in enumerate(basis):
@@ -172,7 +172,7 @@ def get_qd_loss_unitary(n, m, etas):
         raise ValueError(
             "etas must be a single number or have length equal to m")
     pairs = get_qd_mode_pairs(n, m)
-    N = len(lossy_fock_basis(n, 2*m))
+    N = len(lossy_basis(n, 2*m))
     U = np.eye(N, dtype=complex)
     for i in xrange(m):
         eta = etas[i]

@@ -1,9 +1,9 @@
 from __future__ import print_function, absolute_import, division
 
 import numpy as np
-from .density_loss import lossy_fock_basis
 from ..util import memoize
-from ..fock import lossy_basis_size
+from ..fock import lossy_basis_size, lossy_basis_lookup
+from ..fock import lossy_basis as lossy_fock_basis
 from ..nonlinear import build_fock_nonlinear_layer
 
 
@@ -33,18 +33,9 @@ def add_mode(rho, n, m, newPhotons=0):
 
 
 @memoize
-def get_reverse_basis_lookup(n, m):
-    lookup = dict()
-    outputBasis = lossy_fock_basis(n, m)
-    for i, state in enumerate(outputBasis):
-        lookup[tuple(state)] = i
-    return lookup
-
-
-@memoize
 def get_deletion_mapping(n, m, d):
     inputBasis = lossy_fock_basis(n, m)
-    outputBasisLookup = get_reverse_basis_lookup(n, m-1)
+    outputBasisLookup = lossy_basis_lookup(n, m-1)
     N = len(inputBasis)
     mapping = []
     for k in xrange(N):

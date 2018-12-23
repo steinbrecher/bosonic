@@ -53,16 +53,47 @@ def basis(numPhotons, numModes):
 
 
 @memoize
-def lossy_basis(numPhotons, numModes):
-    basis = []
-    for j in range(numPhotons, 0, -1):
-        basis.extend(fock_basis(j, numModes))
-    basis.extend([numModes*[0], ])
-    return basis
+def basis_lookup(n, m):
+    lookup = dict()
+    outputBasis = basis(n, m)
+    for i, state in enumerate(outputBasis):
+        lookup[tuple(state)] = i
+    return lookup
 
+
+# Memoized function to build the basis efficiently
+# Note: basis is a numpy array here, not a list of lists as fock_basis
+# returns
+
+
+@memoize
+def basis_array(int n, int m):
+    cdef np.ndarray[np.int_t, ndim= 2] basis_array = np.array(
+        basis(n, m), dtype=np.int)
+    return basis_array
+
+
+@memoize
+def lossy_basis(numPhotons, numModes):
+    lb = []
+    for j in range(numPhotons, 0, -1):
+        lb.extend(basis(j, numModes))
+    lb.extend([numModes*[0], ])
+    return lb
+
+
+@memoize
+def lossy_basis_lookup(n, m):
+    lookup = dict()
+    outputBasis = lossy_basis(n, m)
+    for i, state in enumerate(outputBasis):
+        lookup[tuple(state)] = i
+    return lookup
 
 # Computes binomial(m+n-1, n)
 # This is ~5x faster than using scipy.special.binom oddly enough
+
+
 @memoize
 def basis_size(int n, int m):
     cdef int top = n + m - 1

@@ -1,36 +1,27 @@
-from cython.parallel cimport prange, parallel
 from __future__ import print_function, absolute_import, division
+from cython.parallel cimport prange, parallel
 
 import numpy as np
 from libc.stdlib cimport abort, malloc, free
 from libc.string cimport memset
-from .bosonic_util import memoize
-from .fock import fock_basis, basis_size, lossy_basis_size, factorial
+from .util import memoize
+from .fock import basis as fock_basis
+from .fock import basis_array, basis_size, lossy_basis_size, factorial
 
 # Needed for compile-time information about numpy
 cimport numpy as np
-
-# Memoized function to build the basis efficiently
-# Note: basis is a numpy array here, not a list of lists as fock_basis
-# returns
-
-
-@memoize
-def build_basis(int n, int m):
-    cdef np.ndarray[np.int_t, ndim= 2] basis = np.array(fock_basis(n, m), dtype=np.int)
-    return basis
 
 
 def fock_to_idx(np.ndarray[np.int_t, ndim=1] S, int n):
     """Converts fock state S to list with s_i copies of the number i
     i.e. state [0,2,1,0]->[1,1,2]
     """
-    cdef np.ndarray idx = np.zeros([n,], dtype=np.int)
+    cdef np.ndarray idx = np.zeros([n, ], dtype=np.int)
     cdef int s
     cdef int count = 0
     for i in range(S.shape[0]):
         s = S[i]
-        if s==0:
+        if s == 0:
             continue
         for j in range(s):
             idx[count] = i
@@ -39,14 +30,16 @@ def fock_to_idx(np.ndarray[np.int_t, ndim=1] S, int n):
 
 # This stuff only gets run once per basis (dim of U and # of photons)
 # so may as well cache all of it
+
+
 @memoize
 def build_norm_and_idxs(int n, int m):
-    cdef np.ndarray basis = build_basis(n, m)
+    cdef np.ndarray basis = basis_array(n, m)
     cdef int N = basis_size(n, m)
-    cdef np.ndarray[np.double_t, ndim=1] factProducts = np.zeros([N, ], dtype=np.double)
-    cdef np.ndarray[np.double_t, ndim=2] normalization = np.zeros([N,N], dtype=np.double)
-    cdef np.ndarray[np.int_t, ndim=2] idxs = np.zeros([N, n], dtype=np.int)
-    
+    cdef np.ndarray[np.double_t, ndim = 1] factProducts = np.zeros([N, ], dtype=np.double)
+    cdef np.ndarray[np.double_t, ndim= 2] normalization = np.zeros([N, N], dtype=np.double)
+    cdef np.ndarray[np.int_t, ndim = 2] idxs = np.zeros([N, n], dtype=np.int)
+
     for i in range(basis.shape[0]):
         S = basis[i]
         # Generate factorial product for state
@@ -54,14 +47,18 @@ def build_norm_and_idxs(int n, int m):
         for x in S:
             product *= factorial(x)
         factProducts[i] = np.sqrt(product)
-        
+
         idxs[i] = fock_to_idx(S, n)
     normalization = np.outer(factProducts, factProducts)
     return (normalization, idxs)
 
+
 cimport cython
-@cython.boundscheck(False) # turn off bounds-checking for entire function
-@cython.wraparound(False)  # turn off negative index wrapping for entire function
+
+
+@cython.boundscheck(False)  # turn off bounds-checking for entire function
+# turn off negative index wrapping for entire function
+@cython.wraparound(False)
 def aa_phi3(np.ndarray[np.complex128_t, ndim=2] U, int n):
     assert U.dtype == np.complex128
     cdef int m = U.shape[0]
@@ -70,25 +67,25 @@ def aa_phi3(np.ndarray[np.complex128_t, ndim=2] U, int n):
     cdef int j
     cdef int I
     cdef int J
-    cdef np.ndarray[np.complex128_t, ndim=2] phiU = np.empty([N, N], dtype=np.complex128)
-    cdef np.ndarray[np.complex128_t, ndim=2] U_T = np.empty([m, n], dtype=np.complex128)
-    cdef np.ndarray[np.complex128_t, ndim=2] U_ST = np.empty([n, n], dtype=np.complex128)
-    cdef np.ndarray[np.int_t, ndim=2] idxs
-    cdef np.ndarray[np.double_t, ndim=2] normalization
+    cdef np.ndarray[np.complex128_t, ndim= 2] phiU = np.empty([N, N], dtype=np.complex128)
+    cdef np.ndarray[np.complex128_t, ndim= 2] U_T = np.empty([m, n], dtype=np.complex128)
+    cdef np.ndarray[np.complex128_t, ndim= 2] U_ST = np.empty([n, n], dtype=np.complex128)
+    cdef np.ndarray[np.int_t, ndim= 2] idxs
+    cdef np.ndarray[np.double_t, ndim= 2] normalization
 
     normalization, idxs = build_norm_and_idxs(n, m)
 
     for col in range(N):
         for j in range(n):
-            J = idxs[col,j]
+            J = idxs[col, j]
             for i in range(m):
-                U_T[i,j] = U[i, J]
+                U_T[i, j] = U[i, J]
 
         for row in range(N):
             for i in range(n):
-                I = idxs[row,i]
+                I = idxs[row, i]
                 for j in range(n):
-                    U_ST[i,j] = U_T[I, j]
+                    U_ST[i, j] = U_T[I, j]
 
             phiU[row, col] = permanent(U_ST) 
     return phiU / normalization

@@ -1,7 +1,9 @@
 from __future__ import print_function, absolute_import, division
 
 import numpy as np
-from .fock import fock_basis, lossy_fock_basis
+from .fock import basis as fock_basis
+from .fock import lossy_basis as lossy_fock_basis
+from .util import memoize
 
 
 def expi(x):
@@ -12,8 +14,7 @@ def expi(x):
     return np.exp(1j * x)
 
 
-def build_fock_nonlinear_layer(numPhotons, numModes, theta, lossy=False,
-                               includeZero=True):
+def build_fock_nonlinear_layer(numPhotons, numModes, theta, lossy=False):
     """Build a kerr-nonlinear layer in the fock basis
     Inputs:
         numPhotons: number of photons
@@ -35,7 +36,7 @@ def build_fock_nonlinear_layer(numPhotons, numModes, theta, lossy=False,
     if theta.size == 1:
         if lossy:
             return build_lossy_fock_nonlinear_layer_constant(
-                numPhotons, numModes, theta, includeZero=includeZero)
+                numPhotons, numModes, theta)
         return build_fock_nonlinear_layer_constant(numPhotons, numModes, theta)
     if theta.size == numModes:
         if lossy:
@@ -47,6 +48,7 @@ def build_fock_nonlinear_layer(numPhotons, numModes, theta, lossy=False,
             "Theta must be a single number or an array of size numModes")
 
 
+@memoize
 def build_fock_nonlinear_layer_variable(numPhotons, numModes, theta):
     basis = fock_basis(numPhotons, numModes)
     N = len(basis)
@@ -66,6 +68,7 @@ def build_fock_nonlinear_layer_variable(numPhotons, numModes, theta):
     return A
 
 
+@memoize
 def build_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
     basis = fock_basis(numPhotons, numModes)
     N = len(basis)
@@ -86,9 +89,9 @@ def build_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
     return A
 
 
-def build_lossy_fock_nonlinear_layer_constant(numPhotons, numModes, theta,
-                                              includeZero=True):
-    basis = lossy_fock_basis(numPhotons, numModes, includeZero=includeZero)
+@memoize
+def build_lossy_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
+    basis = lossy_fock_basis(numPhotons, numModes)
     N = len(basis)
     A = np.eye(N, dtype=complex)
     for i, state in enumerate(basis):
