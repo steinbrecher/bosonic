@@ -3,7 +3,7 @@ import autograd.numpy as np
 from ..clements import build_bs_layer
 from ..fock import basis_size
 from ..fock import basis as fock_basis
-from ..nonlinear import build_fock_nonlinear_layer
+#from ..nonlinear import build_fock_nonlinear_layer
 from .. import fock_to_idx
 from .. import aa_phi as aa_phi_fast
 from .. import aa_phi_vjp
@@ -153,68 +153,50 @@ def build_ust_idxs(n, m):
     return ustIdxs
 
 
-def build_system_function(n, m, numLayers, phi=np.pi, buildFast=False,
-                          method='clements'):
+@memoize
+def build_nonlin_products(numPhotons, numModes):
+    basis = fock_basis(numPhotons, numModes)
+    N = len(basis)
+    D = np.zeros((N,))
+    for i, state in enumerate(basis):
+        # Convert state to an array
+        s = np.array(state)
+
+        # Set all modes with zero or one photons equal to zero
+        s -= 1
+        phase = 0
+        for j in xrange(numModes):
+            if s[j] > 1:
+                phase += s[j] * (s[j]-1) / 2
+        D[i] = phase
+    return D
+
+
+def build_fock_nonlinear_layer(numPhotons, numModes, theta):
+    # Update A
+    D = np.exp(1j * theta * build_nonlin_products(numPhotons, numModes))
+    return np.diag(D)
+
+
+def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
+    validMethods = ['clements', 'reck', 'unitaries']
+    if method not in validMethods:
+        msg = "Error: method not in {}".format(validMethods)
+        raise ValueError(msg)
+
     # Phases per layer
     ppl = m * (m - 1)
     N = basis_size(n, m)
     basis = fock_basis(n, m)
 
-    nonlin = build_fock_nonlinear_layer(n, m, phi)
-    nonlinD = np.diag(nonlin)[:, None]
+    if phi is not None:
+        nonlin = build_fock_nonlinear_layer(n, m, phi)
+        nonlinD = np.diag(nonlin)[:, None]
 
     # Calculate the factorial products
     factProducts = np.zeros((N,))
     for i, S in enumerate(basis):
         factProducts[i] = np.sqrt(np.prod([factorial(x) for x in S]))
-    normalization = np.outer(factProducts, factProducts)
-
-    # Get the idx lists
-    idxs = [fock_to_idx(np.array(S), n) for S in basis]
-
-    @primitive
-    def _perm(A):
-        return bp(A)
-    defvjp(_perm, bp_vjp)
-
-    def _aa_phi(U):
-        _U_T = [[0.+0j for i in range(n)] for j in range(m)]
-        _U_ST = [[0.+0j for i in range(n)] for j in range(n)]
-        _phiU = [[0.+0j for i in range(N)] for j in range(N)]
-        for col in range(N):
-            for i in range(m):
-                for j in range(n):
-                    _U_T[i][j] = U[i][idxs[col][j]]
-
-            for row in range(N):
-                for i in range(n):
-                    for j in range(n):
-                        _U_ST[i][j] = _U_T[idxs[row][i]][j]
-                _phiU[row][col] = _perm(np.array(_U_ST))
-
-        return np.array(_phiU)/normalization
-
-    _phiU = [[0.+0j for i in range(N)] for j in range(N)]
-
-    def _aa_phi2(U):
-        for col in range(N):
-            _U_T = U[:, idxs[col]]
-
-            for row in range(N):
-                _U_ST = _U_T[idxs[row], :]
-                _phiU[row][col] = _perm(_U_ST)
-
-        return np.array(_phiU)/normalization
-
-    ustIdxs = build_ust_idxs(n, m)
-
-    def _aa_phi3(U):
-        for col in range(N):
-            for row in range(N):
-                _phiU[row][col] = _perm(
-                    U[ustIdxs[row, col, :, :, 0], ustIdxs[row, col, :, :, 1]])
-
-        return np.array(_phiU)/normalization
 
     @primitive
     def _aa_phi4(U):
@@ -224,50 +206,118 @@ def build_system_function(n, m, numLayers, phi=np.pi, buildFast=False,
         return aa_phi_vjp(ans, a, n, m)
     defvjp(_aa_phi4, _aa_phi_vjp)
 
-    if method == 'clements':
-        def build_system(phases):
-            S = np.eye(N, dtype=complex)
-            for l in range(numLayers):
-                U = clements_build(phases[ppl*l:ppl*(l+1)], m)
-                phiU = _aa_phi4(U)
-                layer = np.multiply(nonlinD, phiU)
-                S = np.dot(layer, S)
-            return S
+    if phi is not None:
+        if method == 'clements':
+            def build_system(phases):
+                S = np.eye(N, dtype=complex)
+                for l in range(numLayers):
+                    U = clements_build(phases[ppl*l:ppl*(l+1)], m)
+                    phiU = _aa_phi4(U)
+                    layer = np.multiply(nonlinD, phiU)
+                    S = np.dot(layer, S)
+                return S
 
-        if not buildFast:
-            return build_system
+            def build_system_fast(phases):
+                S = np.eye(N, dtype=complex)
+                for l in range(numLayers):
+                    U = clements_build_fast(phases[ppl*l:ppl*(l+1)], m)
+                    phiU = aa_phi_fast(U, n)
+                    layer = np.dot(nonlin, phiU)
+                    S = np.dot(layer, S)
+                return S
+        elif method == 'reck':
+            def build_system(phases):
+                S = np.eye(N, dtype=complex)
+                for l in range(numLayers):
+                    U = reck_build(phases[ppl*l:ppl*(l+1)], m)
+                    phiU = _aa_phi4(U)
+                    layer = np.multiply(nonlinD, phiU)
+                    S = np.dot(layer, S)
+                return S
 
-        def build_system_fast(phases):
-            S = np.eye(N, dtype=complex)
-            for l in range(numLayers):
-                U = clements_build_fast(phases[ppl*l:ppl*(l+1)], m)
-                phiU = aa_phi_fast(U, n)
-                layer = np.dot(nonlin, phiU)
-                S = np.dot(layer, S)
-            return S
-    elif method == 'reck':
-        def build_system(phases):
-            S = np.eye(N, dtype=complex)
-            for l in range(numLayers):
-                U = reck_build(phases[ppl*l:ppl*(l+1)], m)
-                phiU = _aa_phi4(U)
-                layer = np.multiply(nonlinD, phiU)
-                S = np.dot(layer, S)
-            return S
+            def build_system_fast(phases):
+                S = np.eye(N, dtype=complex)
+                for l in range(numLayers):
+                    U = reck_build_fast(phases[ppl*l:ppl*(l+1)], m)
+                    phiU = aa_phi_fast(U, n)
+                    layer = np.dot(nonlin, phiU)
+                    S = np.dot(layer, S)
+                return S
+        elif method == 'unitaries':
+            m2 = m * m
 
-        if not buildFast:
-            return build_system
+            def build_system(x):
+                S = np.eye(N, dtype=complex)
+                for i in range(numLayers):
+                    U = np.reshape(x[i*m2:(i+1)*m2], (m, m))
+                    phiU = _aa_phi4(U)
+                    S = np.dot(phiU, S)
+                    S = np.dot(nonlin, S)
+                return S
+            build_system_fast = build_system
+    else:  # No phi provided
+        if method == 'clements':
+            def build_system(phases):
+                nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
+                nonlinD = np.diag(nonlin)[:, None]
 
-        def build_system_fast(phases):
-            S = np.eye(N, dtype=complex)
-            for l in range(numLayers):
-                U = reck_build_fast(phases[ppl*l:ppl*(l+1)], m)
-                phiU = aa_phi_fast(U, n)
-                layer = np.dot(nonlin, phiU)
-                S = np.dot(layer, S)
-            return S
-    # elif method == 'unitaries':
-    #     def build_system(x):
-    #         S = np.eye(N, dtype=complex)
+                S = np.eye(N, dtype=complex)
+                for l in range(numLayers):
+                    U = clements_build(phases[ppl*l:ppl*(l+1)], m)
+                    phiU = _aa_phi4(U)
+                    layer = np.multiply(nonlinD, phiU)
+                    S = np.dot(layer, S)
+                return S
+
+            def build_system_fast(phases):
+                nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
+                nonlinD = np.diag(nonlin)[:, None]
+
+                S = np.eye(N, dtype=complex)
+                for l in range(numLayers):
+                    U = clements_build_fast(phases[ppl*l:ppl*(l+1)], m)
+                    phiU = aa_phi_fast(U, n)
+                    layer = np.multiply(nonlinD, phiU)
+                    S = np.dot(layer, S)
+                return S
+        elif method == 'reck':
+            def build_system(phases):
+                nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
+                nonlinD = np.diag(nonlin)[:, None]
+
+                S = np.eye(N, dtype=complex)
+                for l in range(numLayers):
+                    U = reck_build(phases[ppl*l:ppl*(l+1)], m)
+                    phiU = _aa_phi4(U)
+                    layer = np.multiply(nonlinD, phiU)
+                    S = np.dot(layer, S)
+                return S
+
+            def build_system_fast(phases):
+                nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
+                nonlinD = np.diag(nonlin)[:, None]
+
+                S = np.eye(N, dtype=complex)
+                for l in range(numLayers):
+                    U = reck_build_fast(phases[ppl*l:ppl*(l+1)], m)
+                    phiU = aa_phi_fast(U, n)
+                    layer = np.multiply(nonlinD, phiU)
+                    S = np.dot(layer, S)
+                return S
+        elif method == 'unitaries':
+            m2 = m * m
+
+            def build_system(x):
+                phi = x[-1]
+                x = x[:-1]
+                nonlin = build_fock_nonlinear_layer(n, m, phi)
+                S = np.eye(N, dtype=complex)
+                for i in range(numLayers):
+                    U = np.reshape(x[i*m2:(i+1)*m2], (m, m))
+                    phiU = _aa_phi4(U)
+                    S = np.dot(phiU, S)
+                    S = np.dot(nonlin, S)
+                return S
+            build_system_fast = build_system
 
     return build_system, build_system_fast

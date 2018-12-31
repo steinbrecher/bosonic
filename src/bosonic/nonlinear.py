@@ -79,10 +79,10 @@ def build_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
 
         # Set all modes with zero or one photons equal to zero
         s -= 1
-        s[s <= 0] = 0
-
-        # Calculate phase of the nonlinearity
-        phase = np.sum(s) * theta
+        phase = 0
+        for j in xrange(numModes):
+            if s[j] > 1:
+                phase += s[j] * (s[j]-1) * theta / 2
 
         # Update A
         A[i, i] = expi(phase)
@@ -102,26 +102,28 @@ def build_lossy_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
         s -= 1
         s[s <= 0] = 0
 
-        # Calculate phase of the nonlinearity
-        phase = np.sum(s) * theta
+        phase = 0
+        for j in xrange(numModes):
+            if s[j] > 1:
+                phase += s[j] * (s[j]-1) * theta / 2
 
         # Update A
         A[i, i] = expi(phase)
     return A
 
 
-# Test that this works for two photons in four modes
-_A = np.eye(10, dtype=complex)
-theta = np.pi
-_A[0, 0] = expi(theta)
-_A[4, 4] = expi(theta)
-_A[7, 7] = expi(theta)
-_A[9, 9] = expi(theta)
+# # Test that this works for two photons in four modes
+# _A = np.eye(10, dtype=complex)
+# theta = np.pi
+# _A[0, 0] = expi(theta)
+# _A[4, 4] = expi(theta)
+# _A[7, 7] = expi(theta)
+# _A[9, 9] = expi(theta)
 
-_Atest = build_fock_nonlinear_layer(2, 4, theta)
-_diff = np.sum(np.ravel(np.abs(_A - _Atest)**2))
-try:
-    assert _diff < 1e-16
-except AssertionError as e:
-    print("Error: build_fock_nonlinear_layer is broken")
-    raise e
+# _Atest = build_fock_nonlinear_layer(2, 4, theta)
+# _diff = np.sum(np.ravel(np.abs(_A - _Atest)**2))
+# try:
+#     assert _diff < 1e-16
+# except AssertionError as e:
+#     print("Error: build_fock_nonlinear_layer is broken")
+#     raise e
