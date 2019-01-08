@@ -33,6 +33,8 @@ def build(phis, m):
         phi2 = build_phi_layer(phis[ptr+ppl:ptr+2*ppl], m, offset)
         U = bs.dot(phi2).dot(bs).dot(phi1).dot(U)
         ptr += 2*ppl
+    U = np.dot(np.diag(np.exp(1j*phis[ptr:ptr+m])), U)
+    ptr += m
     assert ptr == len(phis)
     return U
 

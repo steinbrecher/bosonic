@@ -3,7 +3,7 @@ import autograd.numpy as np
 from ..clements import build_bs_layer
 from ..fock import basis_size
 from ..fock import basis as fock_basis
-#from ..nonlinear import build_fock_nonlinear_layer
+from ..nonlinear import build_fock_nonlinear_layer as fast_nonlin
 from .. import fock_to_idx
 from .. import aa_phi as aa_phi_fast
 from .. import aa_phi_vjp
@@ -129,7 +129,8 @@ def clements_build(phis, m):
         U = np.dot(phi2, U)
         U = np.dot(bs, U)
         ptr += 2*ppl
-    assert ptr == len(phis)
+
+    U = np.dot(np.diag(np.exp(1j*phis[ptr:ptr+m])), U)
     return U
 
 
@@ -163,7 +164,6 @@ def build_nonlin_products(numPhotons, numModes):
         s = np.array(state)
 
         # Set all modes with zero or one photons equal to zero
-        s -= 1
         phase = 0
         for j in xrange(numModes):
             if s[j] > 1:
@@ -178,6 +178,21 @@ def build_fock_nonlinear_layer(numPhotons, numModes, theta):
     return np.diag(D)
 
 
+def build_variable_nonlinear_diag(n, m, thetas):
+    assert len(thetas) == m
+    basis = fock_basis(n, m)
+    N = len(basis)
+    D = N * [0]
+    for i, state in enumerate(basis):
+        phase = 0
+        for j in range(m):
+            phase += thetas[j] * state[j] * (state[j]-1) / 2
+        D[i] = np.exp(1j * phase)
+    D = np.array(D)
+    D = np.reshape(D, (N, 1))
+    return D  # np.array(D, ndmin=2).T
+
+
 def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
     validMethods = ['clements', 'reck', 'unitaries']
     if method not in validMethods:
@@ -185,15 +200,21 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
         raise ValueError(msg)
 
     # Phases per layer
-    ppl = m * (m - 1)
+    if method == 'reck':
+        ppl = m * (m - 1)
+    elif method == 'clements':
+        ppl = m * m
+    numPhases = numLayers * ppl
     N = basis_size(n, m)
     basis = fock_basis(n, m)
 
     if phi is not None:
-        nonlin = build_fock_nonlinear_layer(n, m, phi)
+        # nonlin = b.nonlinear.build_fock_nonlinear_layer(n, m, phi)
+        nonlin = fast_nonlin(n, m, phi)
+        # nonlin = build_fock_nonlinear_layer(n, m, phi)
         nonlinD = np.diag(nonlin)[:, None]
 
-    # Calculate the factorial products
+        # Calculate the factorial products
     factProducts = np.zeros((N,))
     for i, S in enumerate(basis):
         factProducts[i] = np.sqrt(np.prod([factorial(x) for x in S]))
@@ -208,13 +229,16 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
 
     if phi is not None:
         if method == 'clements':
+            ppl = m * m
+
             def build_system(phases):
                 S = np.eye(N, dtype=complex)
                 for l in range(numLayers):
                     U = clements_build(phases[ppl*l:ppl*(l+1)], m)
                     phiU = _aa_phi4(U)
-                    layer = np.multiply(nonlinD, phiU)
-                    S = np.dot(layer, S)
+                    if l < numLayers-1:
+                        phiU = np.multiply(nonlinD, phiU)
+                    S = np.dot(phiU, S)
                 return S
 
             def build_system_fast(phases):
@@ -222,8 +246,9 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
                 for l in range(numLayers):
                     U = clements_build_fast(phases[ppl*l:ppl*(l+1)], m)
                     phiU = aa_phi_fast(U, n)
-                    layer = np.dot(nonlin, phiU)
-                    S = np.dot(layer, S)
+                    if l < numLayers - 1:
+                        phiU = np.dot(nonlin, phiU)
+                    S = np.dot(phiU, S)
                 return S
         elif method == 'reck':
             def build_system(phases):
@@ -256,29 +281,43 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
                 return S
             build_system_fast = build_system
     else:  # No phi provided
+        def build_nonlin(x):
+            return build_variable_nonlinear_diag(n, m, x)
         if method == 'clements':
-            def build_system(phases):
-                nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
-                nonlinD = np.diag(nonlin)[:, None]
+
+            def build_system(x):
+                phases = x[:numPhases]
+                thetas = x[numPhases:]
+                # nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
+                # nonlinD = np.diag(nonlin)[:, None]
 
                 S = np.eye(N, dtype=complex)
                 for l in range(numLayers):
                     U = clements_build(phases[ppl*l:ppl*(l+1)], m)
                     phiU = _aa_phi4(U)
-                    layer = np.multiply(nonlinD, phiU)
-                    S = np.dot(layer, S)
+                    if l < numLayers - 1:
+                        nonlinD = build_nonlin(thetas[m*l:m*(l+1)])
+                        phiU = np.multiply(nonlinD, phiU)
+                        #phiU = np.dot(nonlinD, phiU)
+                    S = np.dot(phiU, S)
                 return S
 
-            def build_system_fast(phases):
-                nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
-                nonlinD = np.diag(nonlin)[:, None]
+            def build_system_fast(x):
+                phases = x[:numPhases]
+                thetas = x[numPhases:]
 
                 S = np.eye(N, dtype=complex)
                 for l in range(numLayers):
                     U = clements_build_fast(phases[ppl*l:ppl*(l+1)], m)
                     phiU = aa_phi_fast(U, n)
-                    layer = np.multiply(nonlinD, phiU)
-                    S = np.dot(layer, S)
+                    if l < numLayers - 1:
+                        nonlinD = build_variable_nonlinear_diag(
+                            n, m, thetas[m*l:m*(l+1)])
+                        #nonlinD = np.diag(nonlinD)
+                        #nonlinD = np.reshape(nonlinD, (N, 1))
+                        phiU = np.multiply(nonlinD, phiU)
+                        # phiU = np.dot(nonlinD, phiU)
+                    S = np.dot(phiU, S)
                 return S
         elif method == 'reck':
             def build_system(phases):

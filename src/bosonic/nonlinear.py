@@ -54,14 +54,11 @@ def build_fock_nonlinear_layer_variable(numPhotons, numModes, theta):
     N = len(basis)
     A = np.eye(N, dtype=complex)
     for i, state in enumerate(basis):
-        # Convert state to an array
-        s = np.array(state)
-
         # Calculate phase of the nonlinearity
         phase = 0
         for j in xrange(numModes):
-            if s[j] > 1:
-                phase += s[j] * (s[j]-1) * theta[j] / 2
+            if state[j] > 1:
+                phase += state[j] * (state[j]-1) * theta[j] / 2
 
         # Update A
         A[i, i] = expi(phase)
@@ -74,15 +71,11 @@ def build_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
     N = len(basis)
     A = np.eye(N, dtype=complex)
     for i, state in enumerate(basis):
-        # Convert state to an array
-        s = np.array(state)
-
         # Set all modes with zero or one photons equal to zero
-        s -= 1
         phase = 0
         for j in xrange(numModes):
-            if s[j] > 1:
-                phase += s[j] * (s[j]-1) * theta / 2
+            if state[j] > 1:
+                phase += state[j] * (state[j]-1) * theta / 2
 
         # Update A
         A[i, i] = expi(phase)
@@ -99,7 +92,6 @@ def build_lossy_fock_nonlinear_layer_constant(numPhotons, numModes, theta):
         s = np.array(state)
 
         # Set all modes with zero or one photons equal to zero
-        s -= 1
         s[s <= 0] = 0
 
         phase = 0
