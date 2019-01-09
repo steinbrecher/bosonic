@@ -11,6 +11,12 @@ from .. import aa_phi
 from ..util import memoize
 
 
+@memoize
+def fock_basis_array(n, m):
+    """Only convert fock_basis to an array once"""
+    return np.array(fock_basis(n, m))
+
+
 def phase_two(theta1, theta2=0):
     """Generate two mode phase screen"""
     return np.array([[np.exp(1j*theta1), 0],
@@ -43,7 +49,9 @@ def embedded_mzi(mode, phis, numModes):
 
 @memoize
 def build_mzi_list(numModes, numPhotons=None):
-    "gives reck MZI addresses in [diagonal, mode], in order of construction"
+    """gives reck MZI addresses in [diagonal, mode], in order of 
+    construction
+    """
     if numPhotons is None:
         ls = []
         for j in range(numModes-1):
@@ -85,7 +93,6 @@ def reck_build(phiList, numModes, numPhotons=None):
 
 @primitive
 def build_phi_layer(phis, m, offset):
-    # d = np.eye(m, dtype=complex)
     d = np.ones((m, 1), dtype=complex)
     for i, j in enumerate(range(offset, m-1, 2)):
         d[j, 0] = np.exp(1j*phis[i])
@@ -93,12 +100,12 @@ def build_phi_layer(phis, m, offset):
 
 
 def build_phi_layer_vjp(ans, phis, m, offset):
-    def vjp(g):
+    def _build_phi_layer_vjp(g):
         out = np.zeros(phis.shape)
         for i, j in enumerate(range(offset, m-1, 2)):
             out[i] += np.real(ans[j, 0] * 1j * g[j, 0])
         return out
-    return vjp
+    return _build_phi_layer_vjp
 
 
 defvjp(build_phi_layer, build_phi_layer_vjp, None, None)
@@ -172,56 +179,41 @@ def build_nonlin_products(numPhotons, numModes):
     return D
 
 
-def build_fock_nonlinear_layer(numPhotons, numModes, theta):
+def build_fock_nonlinear_layerD(numPhotons, numModes, theta):
     # Update A
     D = np.exp(1j * theta * build_nonlin_products(numPhotons, numModes))
-    return np.diag(D)
+    return np.reshape(D, (D.size, 1))
 
 
 @primitive
 def var_nonlin_diag(thetas, n, m):
     assert len(thetas) == m
-    basis = fock_basis(n, m)
-    N = len(basis)
-    D = np.zeros((N, 1), dtype=complex)
-    for i, state in enumerate(basis):
-        phase = 0
-        for j in range(m):
-            phase += thetas[j] * state[j] * (state[j]-1) / 2
-        D[i, 0] = np.exp(1j * phase)
+    basis = fock_basis_array(n, m)
+    coeffs = basis * (basis - 1) / 2.0
+    # N = basis.shape[0]
+    # D = np.zeros((N, 1), dtype=complex)
+    D = np.sum(np.multiply(np.reshape(thetas, (m, 1)), coeffs.T).T, axis=1)
+    D = np.exp(1j * D)
+    # for i in range(N):
+    #     D[i, 0] = np.exp(1j * np.sum(thetas * coeffs[i, :]))
     return D
 
 
 def var_nonlin_diag_vjp(ans, thetas, n, m):
-    basis = fock_basis(n, m)
+    basis = fock_basis_array(n, m)
+    N = basis.shape[0]
+    coeffs = basis * (basis-1) / 2.0
+    coeffs = np.multiply(np.reshape(ans, (N, 1)), coeffs)
 
-    def vjp(g):
-        out = np.zeros((m,))
-        for j in range(m):
-            for i, state in enumerate(basis):
-                coeff = state[j] * (state[j]-1) / 2
-                out[j] += np.real(1j * coeff * ans[i] * g[i])
+    def _var_nonlin_diag_vjp(g):
+        gcoeffs = np.multiply(np.reshape(g, (N, 1)), coeffs)
+        out = np.sum(np.real(1j * gcoeffs), axis=0)
         return out
 
-    return vjp
+    return _var_nonlin_diag_vjp
 
 
 defvjp(var_nonlin_diag, var_nonlin_diag_vjp, None, None)
-
-
-def build_variable_nonlinear_diag(n, m, thetas):
-    assert len(thetas) == m
-    basis = fock_basis(n, m)
-    N = len(basis)
-    D = N * [0]
-    for i, state in enumerate(basis):
-        phase = 0
-        for j in range(m):
-            phase += thetas[j] * state[j] * (state[j]-1) / 2
-        D[i] = np.exp(1j * phase)
-    D = np.array(D)
-    D = np.reshape(D, (N, 1))
-    return D  # np.array(D, ndmin=2).T
 
 
 def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
@@ -286,14 +278,9 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
 
     else:  # No phi provided
         if method == 'clements':
-            def build_nonlin(x):
-                return build_variable_nonlinear_diag(n, m, x)
-
             def build_system(x):
                 phases = x[:numPhases]
                 thetas = x[numPhases:]
-                # nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
-                # nonlinD = np.diag(nonlin)[:, None]
 
                 S = np.eye(N, dtype=complex)
                 for l in range(numLayers):
@@ -301,15 +288,13 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
                     phiU = aa_phi(U, n)
                     if l < numLayers - 1:
                         nonlinD = var_nonlin_diag(thetas[m*l:m*(l+1)], n, m)
-                        #nonlinD = build_nonlin(thetas[m*l:m*(l+1)])
                         phiU = np.multiply(nonlinD, phiU)
                     S = np.dot(phiU, S)
                 return S
 
         elif method == 'reck':
             def build_system(phases):
-                nonlin = build_fock_nonlinear_layer(n, m, phases[-1])
-                nonlinD = np.diag(nonlin)[:, None]
+                nonlinD = build_fock_nonlinear_layerD(n, m, phases[-1])
 
                 S = np.eye(N, dtype=complex)
                 for l in range(numLayers):
@@ -325,13 +310,13 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
             def build_system(x):
                 phi = x[-1]
                 x = x[:-1]
-                nonlin = build_fock_nonlinear_layer(n, m, phi)
+                nonlinD = build_fock_nonlinear_layerD(n, m, phi)
                 S = np.eye(N, dtype=complex)
                 for i in range(numLayers):
                     U = np.reshape(x[i*m2:(i+1)*m2], (m, m))
                     phiU = aa_phi(U, n)
-                    S = np.dot(phiU, S)
-                    S = np.dot(nonlin, S)
+                    layer = np.multiply(nonlinD, phiU)
+                    S = np.dot(layer, S)
                 return S
 
     return build_system, info

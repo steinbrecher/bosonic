@@ -16,8 +16,9 @@ cimport cython
 
 def fock_to_idx(np.ndarray[np.int_t, ndim=1] S, int n):
     """Converts fock state S to list with s_i copies of the number i
-    i.e. state [0,2,1,0]->[1,1,2]
+    e.g. state [0,2,1,0]->[1,1,2]
     """
+    assert n == sum(S)
     cdef np.ndarray idx = np.zeros([n, ], dtype=np.int)
     cdef int s
     cdef int count = 0
@@ -30,17 +31,52 @@ def fock_to_idx(np.ndarray[np.int_t, ndim=1] S, int n):
             count += 1
     return idx
 
-# This stuff only gets run once per basis (dim of U and # of photons)
-# so may as well cache all of it
-
 
 @memoize
-def build_norm_and_idxs(int n, int m):
-    cdef np.ndarray basis = basis_array(n, m)
-    cdef int N = basis_size(n, m)
-    cdef np.ndarray[np.double_t, ndim= 1] factProducts = np.zeros([N, ], dtype=np.double)
-    cdef np.ndarray[np.double_t, ndim = 2] normalization = np.zeros([N, N], dtype=np.double)
-    cdef np.ndarray[np.int_t, ndim= 2] idxs = np.zeros([N, n], dtype=np.int)
+def build_norm_and_idxs(size_t n, size_t m):
+    """Helper function for aa_phi to build normalization array and index slices
+
+    The entry of phi(U) corresponding to output S=[s_1,...,s_m] and input 
+    T=[t_1,...,t_m] is perm(U_ST) / sqrt(s_1! * ... * s_m! * t_1 * ... * t_m!). 
+
+    This function computes both the necessary index slices to convert U to U_ST 
+    and computes the value of the sqrt normalization for each S,T pair.
+
+    Parameters
+    ----------
+    n : size_t
+        Number of photons
+    m : size_t
+        Number of modes
+
+    Returns
+    -------
+    normalization : np.ndarray[np.double_t, ndim = 2]
+                    Normalization coefficients for each entry in phi(U)
+    idxs : np.ndarray[np.int_t, ndim = 2]
+           Index slices for reducing U to U_T and U_T to U_ST
+
+    See Also
+    --------
+    aa_phi : Function that computes phi(U), which this is a helper function for
+
+    Notes
+    -----
+    Function is memoized
+    """
+
+    cdef int N
+    cdef size_t i
+    cdef np.ndarray basis
+    cdef np.ndarray[np.double_t, ndim= 1] factProducts
+    cdef np.ndarray[np.double_t, ndim= 2] normalization
+    cdef np.ndarray[np.int_t, ndim= 2] idxs
+
+    N = basis_size(n, m)
+    basis = basis_array(n, m)
+    factProducts = np.zeros([N, ], dtype=np.double)
+    normalization = np.zeros([N, N], dtype=np.double)
+    idxs = np.zeros([N, n], dtype=np.int)
 
     for i in range(basis.shape[0]):
         S = basis[i]
@@ -55,20 +91,52 @@ def build_norm_and_idxs(int n, int m):
     return (normalization, idxs)
 
 
-kIdxLookup = {}
-
-
 @memoize
 def build_kIdxs(int n):
-    cdef np.ndarray[np.int_t, ndim = 1] kIdxs = np.empty([2**n, ], dtype=np.int)
-    cdef np.ndarray[np.int_t, ndim = 1] kSgns = np.empty([2**n, ], dtype=np.int)
+    """Helper function for permanent calculation
+
+    The way we compute permanents here is by iterating over the permutations
+    in gray code order. Iterating over the permutations in this way reduces
+    the asymptotic complexity of Ryser's algorithm from O(2^{n-1} n^2) to
+    O(2^{n-1} n) for an n x n matrix. 
+
+    Gray codes are orderings of the integers {0,...,N} such that each number 
+    has only one bit flipped from the previous number in the sequence. This 
+    function computes /which/ bit to flip at each step, and whether that flip 
+    was from 0->1 or 1->0. 
+
+    Parameters
+    ----------
+    n : int
+        Dimension of matrix
+
+    Returns
+    -------
+    kIdxs : np.ndarray[np.int_t, ndim= 1]
+            Index of which bit is flipped for each of the gray code entries
+    kSgns : np.ndarray[np.int_t, ndim= 1] kSgns
+            Sign of the flip; -1 if bit was flipped 1->0, 1 otherwise
+
+    Notes
+    -----
+    Function is memoized
+    """
+    cdef np.ndarray[np.int_t, ndim = 1] kIdxs
+    cdef np.ndarray[np.int_t, ndim = 1] kSgns
     cdef int k, gray, lastGray, deltaGray, count, kIdx, kSgn
+
+    kIdxs = np.empty([2**n, ], dtype=np.int)
+    kSgns = np.empty([2**n, ], dtype=np.int)
 
     # Construct lookup tables for which bit in the gray code flipped from
     # the previous k and whether it was a 0->1 transition or a 1-> 0
     # transition.
     kIdxs[0] = 0
     kSgns[0] = 1
+
+    # Since the function is memoized, the parallel computation here is
+    # probably unnecessary complexity. That said, it works, so there's no
+    # reason to make it slower at this point
     with nogil, parallel():
         for k in prange(1, 2**n, schedule='dynamic'):
             # Since this is in parallel, can't save the previous gray number
@@ -98,10 +166,22 @@ def build_kIdxs(int n):
 @cython.boundscheck(False)  # turn off bounds-checking for entire function
 # turn off negative index wrapping for entire function
 @cython.wraparound(False)
-def permanent(a):
+def permanent(np.ndarray[np.complex128_t, ndim=2] a):
+    """Compute the permanent of the complex matrix a
+
+    Parameters
+    ----------
+    a : np.ndarray[np.complex128_t, ndim=2]
+        2D square matrix
+
+    Returns
+    -------
+    Perm(a) : complex
+
+    """
     # def permanent(np.ndarray[np.complex128_t, ndim=2] a):
     cdef int n = a.shape[0]
-    cdef np.ndarray[np.complex128_t, ndim= 2] partials = np.empty([n, n], dtype=np.complex128)
+    cdef np.ndarray[np.complex128_t, ndim = 2] partials = np.empty([n, n], dtype=np.complex128)
     cdef int i
     cdef int j
     cdef int k
@@ -125,23 +205,43 @@ def permanent(a):
     return p
 
 
-# Cython implementation of permanent calculation
-@cython.boundscheck(False)  # turn off bounds-checking for entire function
-# turn off negative index wrapping for entire function
+@cython.boundscheck(False)
 @cython.wraparound(False)
-def minor(np.ndarray[np.complex128_t, ndim=2] a, size_t x, size_t y):
-    cdef size_t n = a.shape[0]
-    cdef np.ndarray[np.complex128_t, ndim= 2] b = np.zeros((n-1, n-1), dtype=np.complex128)
-    cdef size_t i
-    cdef size_t j
-    cdef size_t ii = 0
-    cdef size_t jj = 0
+def minor(np.ndarray[np.complex128_t, ndim=2] a, size_t row, size_t col):
+    """Build the (x, y) minor of matrix a
+
+    Parameters
+    ----------
+    a : np.ndarray[np.complex128_t, ndim=2]
+        Input matrix
+    row : size_t
+          Row index of the minor
+    col : size_t
+          Column index of the minor
+
+    Returns
+    -------
+    b : np.ndarray[np.complex128_t, ndim=2]
+        a with specified row and column removed
+    """
+    cdef size_t n
+    cdef np.ndarray[np.complex128_t, ndim = 2] b
+    cdef size_t i, j, ii, jj
+
+    n = a.shape[0]
+    b = np.zeros((n-1, n-1), dtype=np.complex128)
+    ii = 0
+    jj = 0
+
+    # Iterate over the rows and columns of a, walking the pointers ii and jj
+    # with us, except when i == row or j == col; in those cases i or j
+    # increase, but ii or jj do not
     for i in range(n):
-        if i == x:
+        if i == row:
             continue
         jj = 0
         for j in range(n):
-            if j == y:
+            if j == col:
                 continue
             b[ii, jj] = a[i, j]
             jj += 1
@@ -149,11 +249,14 @@ def minor(np.ndarray[np.complex128_t, ndim=2] a, size_t x, size_t y):
     return b
 
 
-# Cython implementation of permanent calculation
-@cython.boundscheck(False)  # turn off bounds-checking for entire function
-# turn off negative index wrapping for entire function
+@cython.boundscheck(False)
 @cython.wraparound(False)
 def permanent_vjp(complex ans, np.ndarray[np.complex128_t, ndim=2] x):
+    """Efficient computation of the vector jacobian product for the permanent
+
+    The derivative of Perm(a) w/r/t a_{i,j} is equal to the permanent of the
+    (i, j) minor of a. 
+    """
     cdef size_t n = x.shape[0]
     J = np.zeros((n, n), dtype=np.complex128)
     cdef size_t i
@@ -188,41 +291,16 @@ def build_ust_idxs(n, m):
                     ustIdxs[row, col, i, j, :] = U_Tidx[idxs[row][i], j, :]
     return ustIdxs
 
-# Calculate the block-diagonal version of phi over the lossy basis
-
-
-@cython.boundscheck(False)  # turn off bounds-checking for entire function
-# turn off negative index wrapping for entire function
-@cython.wraparound(False)
-def aa_phi_lossy(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
-    assert U.dtype == np.complex128
-    cdef size_t m = U.shape[0]
-    cdef size_t N = lossy_basis_size(n, m)
-    cdef np.ndarray[np.complex128_t, ndim= 2] S = np.eye(N, dtype = np.complex128)
-
-    cdef size_t nn = n
-    cdef size_t count = 0
-    cdef size_t NN
-
-    while nn > 0:
-        NN = basis_size(nn, m)
-        phiU = aa_phi(U, nn)
-        S[count:count+NN, count:count+NN] = phiU
-        nn -= 1
-        count += NN
-    return S
-
-# Improvement of the threaded version of aa_phi to take advantage of
-# iterating in gray code order (i.e. the rowsums only change by one
-# element of U_ST for each k, so we can save them and update accordingly)
-
 
 @primitive
-@cython.boundscheck(False)  # turn off bounds-checking for entire function
-# turn off negative index wrapping for entire function
+@cython.boundscheck(False)
 @cython.wraparound(False)
 def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
     """Computes multi-particle unitary for a given number of photons
+
+    This implementation computes the elements of phi(U) in parallel, using the 
+    O(2^{n-1} n) implementation of Ryser's algorithm to compute the various 
+    matrix permanents. 
 
     Parameters
     ----------
@@ -243,7 +321,7 @@ def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
     Notes
     -----
     The computational complexity of this function is not for the
-    faint of heart. Specifically it goes as :math:`O(Choose[n+m-1,n] * n * 2^n)`
+    faint of heart; it goes as :math:`O(Choose[n+m-1,n]^2 * n * 2^n)`, 
     where `m` is dimensionality of `U` and `n` is the number of photons.
 
     References
@@ -252,51 +330,50 @@ def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
     complexity of linear optics." In Proceedings of the forty-third
     annual ACM symposium on Theory of computing, pp. 333-342. ACM, 2011.
     """
-    assert U.dtype == np.complex128
-    cdef size_t m = U.shape[0]
-    cdef size_t N = basis_size(n, m)
 
-    cdef size_t row, col
+    cdef size_t N, m
 
-    cdef size_t i, j, I, J
+    cdef size_t row, col, i, j, I, J
 
-    cdef int k
-    cdef int sgn = 1
-    cdef complex rowsum = 0
-    cdef complex rowsumprod
-    cdef complex perm = 1
+    cdef int k, sgn
+    cdef complex rowsumprod, perm
+
+    cdef np.ndarray[np.int_t, ndim = 2] idxs
+    cdef np.ndarray[np.double_t, ndim = 2] normalization
+
+    cdef np.ndarray[np.complex128_t, ndim = 2] phiU
+
+    cdef np.ndarray[np.int_t, ndim= 1] kIdxs
+    cdef np.ndarray[np.int_t, ndim= 1] kSgns
+    cdef int kIdx, kSgn
 
     cdef complex * U_T
     cdef complex * U_ST
     cdef complex * rowsums
 
-    cdef np.ndarray[np.complex128_t, ndim= 2] phiU = np.empty([N, N], dtype = np.complex128)
-
-    cdef np.ndarray[np.double_t, ndim= 2] normalization
-    cdef np.ndarray[np.int_t, ndim= 2] idxs
-
-    cdef np.ndarray[np.int_t, ndim = 1] kIdxs
-    cdef np.ndarray[np.int_t, ndim = 1] kSgns
-    cdef int kIdx
-    cdef int kSgn
+    m = U.shape[0]  # Number of optical modes
+    N = basis_size(n, m)  # Size of the Fock basis
+    phiU = np.empty([N, N], dtype=np.complex128)
 
     # Get the indexes of which element of the gray code changes each
-    # iteration. Only run this once per n, so it's wrapped into its own
-    # function with a dictionary memoization.
+    # iteration. Wrapped into a separate function for memoization, since
+    # these values don't change for a given n
     kIdxs, kSgns = build_kIdxs(n)
+
     # Get normalization matrix for phi(U) and indexes of which elements
     # of U map to elements of U_T and U_ST (see function for more
     # details)
     normalization, idxs = build_norm_and_idxs(n, m)
-    # If n is odd, we flip the sign of the permanents. More efficient
-    # to flip the sign of the normalizations since we have to divide by
-    # it later anyway
+
+    # If n is odd, flip the sign of the permanents.
     if (n % 2) == 1:
         sgn = -1
+    else:
+        sgn = 1
 
     with nogil, parallel(num_threads=12):
         # Note: malloc'd 2d arrays need to be accessed as a 1d array.
-        # Access pattern in C is arr[col + row * numCol]
+        # C is row major, so access pattern is arr[row * numCol + col]
         U_T = < complex * >malloc(sizeof(complex) * m * n)
         if U_T == NULL:
             abort()
@@ -363,43 +440,52 @@ def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
     return phiU
 
 
-@cython.boundscheck(False)  # turn off bounds-checking for entire function
-# turn off negative index wrapping for entire function
+@cython.boundscheck(False)
 @cython.wraparound(False)
 def aa_phi_vjp_fast(np.ndarray[np.complex128_t, ndim=2] g,
-                    np.ndarray[np.complex128_t, ndim=2] a, size_t n, size_t m):
-    cdef np.ndarray[np.complex128_t, ndim= 2] out = np.zeros((m, m), dtype=np.complex128)
+                    np.ndarray[np.complex128_t, ndim=2] a,
+                    size_t n, size_t m):
+    """Compute the vector Jacobian product of aa_phi
+
+    We know that the S,T entry of phi(U) is perm(U_ST)/norm[S,T], so the
+    derivative of this entry, with respect to an entry of U, is the derivative
+    of the permanent with respect to the corresponding entry of U_ST. 
+
+    This function computes each of those partials, back-propagating their effect
+    from g to the matrix out. 
+    """
+    cdef np.ndarray[np.complex128_t, ndim = 2] out
 
     cdef complex J
-    cdef size_t N = basis_size(n, m)
-    cdef size_t minorN = n - 1
-    cdef np.ndarray[np.complex128_t, ndim = 4] Js = np.zeros((N, N, n, n), dtype=complex)
-    cdef np.ndarray[np.int_t, ndim = 5] ustIdxs = build_ust_idxs(n, m)
-    cdef np.ndarray[np.double_t, ndim = 2] normalization
-    cdef np.ndarray[np.int_t, ndim = 2] idxs
-    cdef np.ndarray[np.int_t, ndim = 1] kIdxs
-    cdef np.ndarray[np.int_t, ndim = 1] kSgns
+    cdef size_t N
+    cdef size_t minorN
+    cdef np.ndarray[np.complex128_t, ndim= 4] Js
+    cdef np.ndarray[np.int_t, ndim = 5] ustIdxs
+    cdef np.ndarray[np.double_t, ndim= 2] normalization
+    cdef np.ndarray[np.int_t, ndim= 2] idxs
+    cdef np.ndarray[np.int_t, ndim= 1] kIdxs
+    cdef np.ndarray[np.int_t, ndim= 1] kSgns
 
     cdef int kIdx
     cdef int kSgn
+
+    N = basis_size(n, m)
+    minorN = n - 1
+    out = np.zeros((m, m), dtype=np.complex128)
+    Js = np.zeros((N, N, n, n), dtype=complex)
+    ustIdxs = build_ust_idxs(n, m)
 
     # Get the indexes of which element of the gray code changes each
     # iteration. Only run this once per n, so it's wrapped into its own
     # function with a dictionary memoization.
     kIdxs, kSgns = build_kIdxs(minorN)
+
     # Get normalization matrix for phi(U) and indexes of which elements
     # of U map to elements of U_T and U_ST (see function for more
     # details)
     normalization, idxs = build_norm_and_idxs(n, m)
 
-    cdef size_t row
-    cdef size_t col
-    cdef size_t i
-    cdef size_t j
-    cdef size_t x
-    cdef size_t y
-    cdef size_t ii
-    cdef size_t jj
+    cdef size_t row, col, i, j, x, y, ii, jj
     cdef int k
     cdef int sgn = 1
     cdef complex rowsum = 0
@@ -413,15 +499,15 @@ def aa_phi_vjp_fast(np.ndarray[np.complex128_t, ndim=2] g,
     cdef complex * rowsums
 
     with nogil, parallel(num_threads=12):
-        U_ST = < complex * >malloc(sizeof(complex) * n * n)
+        U_ST = <complex*>malloc(sizeof(complex) * n * n)
         if U_ST == NULL:
             abort()
 
-        minorU = < complex * >malloc(sizeof(complex) * (n-1) * (n-1))
+        minorU = <complex*>malloc(sizeof(complex) * (n-1) * (n-1))
         if minorU == NULL:
             abort()
 
-        rowSums = < complex*>malloc(sizeof(complex) * minorN)
+        rowSums = <complex*>malloc(sizeof(complex) * minorN)
         if rowSums == NULL:
             abort()
 
@@ -494,10 +580,10 @@ def aa_phi_vjp_fast(np.ndarray[np.complex128_t, ndim=2] g,
     return out
 
 
-@cython.boundscheck(False)  # turn off bounds-checking for entire function
-# turn off negative index wrapping for entire function
+@cython.boundscheck(False)
 @cython.wraparound(False)
-def aa_phi_vjp(ans, a, size_t n):
+def aa_phi_vjp(np.ndarray[np.complex128_t, ndim=2] ans, a, size_t n):
+    """aa_phi_vjp_fast wrapper for autograd vjp interface"""
     cdef size_t m = a.shape[0]
 
     def vjp(np.ndarray[np.complex128_t, ndim=2] g):
@@ -507,28 +593,23 @@ def aa_phi_vjp(ans, a, size_t n):
 
 defvjp(aa_phi, aa_phi_vjp, None)
 
-# Improvement of the threaded version of aa_phi to take advantage of
-# iterating in gray code order (i.e. the rowsums only change by one
-# element of U_ST for each k, so we can save them and update accordingly)
 
-
-@cython.boundscheck(False)  # turn off bounds-checking for entire function
-# turn off negative index wrapping for entire function
+@cython.boundscheck(False)
 @cython.wraparound(False)
 def aa_phi_restricted(np.ndarray[np.complex128_t, ndim=2] U, size_t n,
                       np.ndarray[np.int_t, ndim=1] idxIn,
                       np.ndarray[np.int_t, ndim=1] idxOut):
-    """Computes multi-particle unitary for a given number of photons
+    """Compute restricted multi-particle unitary for only some Fock states
 
     Parameters
     ----------
-    U : array of complex
+    U : np.ndarray[np.complex128_t, ndim=2]
         Single-photon unitary to be transformed
-    n : int
+    n : size_t
         Number of photons to compute unitary for
-    idxIn : array of int
+    idxIn : np.ndarray[np.complex128_t, ndim=1]
             Indices of input states
-    idxOut : array of int
+    idxOut : np.ndarray[np.complex128_t, ndim=1]
              Indices of output states
 
     Returns
@@ -537,14 +618,8 @@ def aa_phi_restricted(np.ndarray[np.complex128_t, ndim=2] U, size_t n,
         Multiparticle unitary over the fock basis. 
 
     See Also
-    -------
-    fock_basis : Generates fock basis for `n` photons over `m` modes
-
-    Notes
-    -----
-    The computational complexity of this function is not for the 
-    faint of heart. Specifically it goes as :math:`O(Choose[n+m-1,n] * n * 2^n)`
-    where `m` is dimensionality of `U` and `n` is the number of photons.
+    --------
+    aa_phi : Computation of the unrestricted multi-particle unitary
 
     References
     ----------
@@ -573,13 +648,13 @@ def aa_phi_restricted(np.ndarray[np.complex128_t, ndim=2] U, size_t n,
     cdef int numIn = idxIn.size
     cdef int numOut = idxOut.size
 
-    cdef np.ndarray[np.complex128_t, ndim= 2] phiU = np.empty([numOut, numIn], dtype=np.complex128)
+    cdef np.ndarray[np.complex128_t, ndim = 2] phiU = np.empty([numOut, numIn], dtype=np.complex128)
 
-    cdef np.ndarray[np.double_t, ndim= 2] normalization
-    cdef np.ndarray[np.int_t, ndim= 2] idxs
+    cdef np.ndarray[np.double_t, ndim = 2] normalization
+    cdef np.ndarray[np.int_t, ndim = 2] idxs
 
-    cdef np.ndarray[np.int_t, ndim = 1] kIdxs
-    cdef np.ndarray[np.int_t, ndim = 1] kSgns
+    cdef np.ndarray[np.int_t, ndim= 1] kIdxs
+    cdef np.ndarray[np.int_t, ndim= 1] kSgns
     cdef int kIdx
     cdef int kSgn
 
@@ -590,10 +665,9 @@ def aa_phi_restricted(np.ndarray[np.complex128_t, ndim=2] U, size_t n,
     # Get normalization matrix for phi(U) and indexes of which elements
     # of U map to elements of U_T and U_ST (see function for more
     # details)
+
     normalization, idxs = build_norm_and_idxs(n, m)
-    # If n is odd, we flip the sign of the permanents. More efficient
-    # to flip the sign of the normalizations since we have to divide by
-    # it later anyway
+
     if (n % 2) == 1:
         sgn = -1
 
@@ -665,3 +739,25 @@ def aa_phi_restricted(np.ndarray[np.complex128_t, ndim=2] U, size_t n,
         free(rowSums)
 
     return phiU
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def aa_phi_lossy(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
+    """Compute the block-diagonal multi particle unitary over the lossy basis
+    """
+    cdef size_t m = U.shape[0]
+    cdef size_t N = lossy_basis_size(n, m)
+    cdef np.ndarray[np.complex128_t, ndim = 2] S = np.eye(N, dtype = np.complex128)
+
+    cdef size_t nn = n
+    cdef size_t count = 0
+    cdef size_t NN
+
+    while nn > 0:
+        NN = basis_size(nn, m)
+        phiU = aa_phi(U, nn)
+        S[count:count+NN, count:count+NN] = phiU
+        nn -= 1
+        count += NN
+    return S
