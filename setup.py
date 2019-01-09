@@ -69,6 +69,12 @@ ext_modules = [
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
     ),
+    Extension(
+        "bosonic.density.density",
+        ["src/bosonic/density/density.pyx"],
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
+    ),
 ]
 
 VERSION = find_meta("version")

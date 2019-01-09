@@ -5,6 +5,11 @@ from ..util import memoize
 from ..fock import lossy_basis_size, lossy_basis_lookup
 from ..fock import lossy_basis as lossy_fock_basis
 from ..nonlinear import build_fock_nonlinear_layer
+from autograd.extend import primitive, defvjp
+
+# Needed for compile-time information about numpy
+cimport numpy as np
+cimport cython
 
 
 @memoize
@@ -56,12 +61,35 @@ def get_deletion_mapping(n, m, d):
     return mapping
 
 
-def delete_mode(rho, n, m, d):
-    NOut = lossy_basis_size(n, m-1)
-    sigma = np.zeros((NOut, NOut), dtype=complex)
+@primitive
+@cython.boundscheck(False)
+def delete_mode(np.ndarray[np.complex128_t, ndim=2] rho,
+                size_t n, size_t m, int d):
+    cdef size_t NOut = lossy_basis_size(n, m-1)
+    cdef np.ndarray[np.complex128_t, ndim= 2] sigma = np.zeros((NOut, NOut), dtype=complex)
+    cdef size_t ak, al, k, l
     for ak, al, k, l in get_deletion_mapping(n, m, d):
-        sigma[ak, al] += rho[k, l]
+        sigma[ak, al] = sigma[ak, al] + rho[k, l]
     return sigma
+
+
+@cython.boundscheck(False)
+def delete_mode_vjp(np.ndarray[np.complex128_t, ndim=2] ans,
+                    np.ndarray[np.complex128_t, ndim=2] rho,
+                    size_t n, size_t m, int d):
+    cdef size_t N = rho.shape[0]
+
+    @cython.boundscheck(False)
+    def vjp(np.ndarray[np.complex128_t, ndim=2] g):
+        cdef np.ndarray[np.complex128_t, ndim= 2] drho = np.zeros((N, N), dtype=complex)
+        cdef size_t ak, al, kk, ll
+        for ak, al, kk, ll in get_deletion_mapping(n, m, d):
+            drho[kk, ll] = drho[kk, ll] + g[ak, al]
+        return drho
+    return vjp
+
+
+defvjp(delete_mode, delete_mode_vjp, None, None, None)
 
 
 def apply_nonlinear(rho, theta, numPhotons, numModes):
