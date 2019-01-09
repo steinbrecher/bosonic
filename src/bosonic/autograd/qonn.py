@@ -49,7 +49,7 @@ def embedded_mzi(mode, phis, numModes):
 
 @memoize
 def build_mzi_list(numModes, numPhotons=None):
-    """gives reck MZI addresses in [diagonal, mode], in order of 
+    """gives reck MZI addresses in [diagonal, mode], in order of
     construction
     """
     if numPhotons is None:
