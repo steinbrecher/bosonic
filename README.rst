@@ -56,4 +56,5 @@ photons leaving by different ports.
 References
 ==========
 [1] Steinbrecher, G. R., Olson, J. P., Englund, D., & Carolan, J. (2018). Quantum optical neural networks. arXiv preprint arXiv:1808.10047. https://arxiv.org/abs/1808.10047
+
 [2] Aaronson, Scott, and Alex Arkhipov. "The computational complexity of linear optics." Proceedings of the forty-third annual ACM symposium on Theory of computing. ACM, 2011. https://arxiv.org/pdf/1011.3245.pdf
