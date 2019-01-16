@@ -3,11 +3,11 @@ import autograd.numpy as np
 from autograd.extend import primitive, defvjp
 from ..clements import build_bs_layer
 from ..clements import build as clements_build_fast
-from ..fock import basis_size
+from ..fock import basis_size, lossy_basis_size
 from ..fock import basis as fock_basis
 from ..nonlinear import build_fock_nonlinear_layer as fast_nonlin
 from .. import fock_to_idx
-from .. import aa_phi
+from .. import aa_phi, aa_phi_lossy
 from ..util import memoize
 
 
@@ -190,12 +190,8 @@ def var_nonlin_diag(thetas, n, m):
     assert len(thetas) == m
     basis = fock_basis_array(n, m)
     coeffs = basis * (basis - 1) / 2.0
-    # N = basis.shape[0]
-    # D = np.zeros((N, 1), dtype=complex)
     D = np.sum(np.multiply(np.reshape(thetas, (m, 1)), coeffs.T).T, axis=1)
-    D = np.exp(1j * D)
-    # for i in range(N):
-    #     D[i, 0] = np.exp(1j * np.sum(thetas * coeffs[i, :]))
+    D = np.reshape(np.exp(1j * D), (len(basis), 1))
     return D
 
 
@@ -215,8 +211,48 @@ def var_nonlin_diag_vjp(ans, thetas, n, m):
 
 defvjp(var_nonlin_diag, var_nonlin_diag_vjp, None, None)
 
+@primitive
+def var_nonlin_diag_lossy(thetas, n, m):
+    assert len(thetas) == m
+    N = lossy_basis_size(n, m)
+    D = np.ones((N, 1), dtype=complex)
+    count = 0
+    nn = n
+    while nn > 0:
+        NN = basis_size(nn, m)
+        basis = fock_basis_array(nn, m)
+        coeffs = basis * (basis - 1) / 2.0
+        DD = np.sum(
+            np.multiply(np.reshape(thetas, (m, 1)), coeffs.T).T, axis=1)
+        DD = np.exp(1j * DD)
+        D[count:count+NN, 0] = DD
+        nn -= 1
+        count += NN
+    return D
 
-def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
+
+def var_nonlin_diag_lossy_vjp(ans, thetas, n, m):
+    def _var_nonlin_diag_lossy_vjp(g):
+        nn = n
+        out = np.zeros(thetas.shape)
+        count = 0
+        while nn > 0:
+            NN = basis_size(nn, m)
+            gg = g[count:count+NN]
+            aa = ans[count:count+NN]
+            out += var_nonlin_diag_vjp(aa, thetas, nn, m)(gg)
+            nn -= 1
+            count += NN
+        return out
+
+    return _var_nonlin_diag_lossy_vjp
+
+
+defvjp(var_nonlin_diag_lossy, var_nonlin_diag_lossy_vjp, None, None)
+
+
+def build_system_function(n, m, numLayers, phi=np.pi, method='clements',
+                          lossy=False):
     validMethods = ['clements', 'reck', 'unitaries']
     if method not in validMethods:
         msg = "Error: method not in {}".format(validMethods)
@@ -229,6 +265,7 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
         ppl = m * m
     numPhases = numLayers * ppl
     N = basis_size(n, m)
+    NL = lossy_basis_size(n, m)
     info = {
         'ppl': ppl,
         'numPhases': numPhases,
@@ -278,19 +315,36 @@ def build_system_function(n, m, numLayers, phi=np.pi, method='clements'):
 
     else:  # No phi provided
         if method == 'clements':
-            def build_system(x):
-                phases = x[:numPhases]
-                thetas = x[numPhases:]
+            if not lossy:
+                def build_system(x):
+                    phases = x[:numPhases]
+                    thetas = x[numPhases:]
 
-                S = np.eye(N, dtype=complex)
-                for l in range(numLayers):
-                    U = clements_build(phases[ppl*l:ppl*(l+1)], m)
-                    phiU = aa_phi(U, n)
-                    if l < numLayers - 1:
-                        nonlinD = var_nonlin_diag(thetas[m*l:m*(l+1)], n, m)
-                        phiU = np.multiply(nonlinD, phiU)
-                    S = np.dot(phiU, S)
-                return S
+                    S = np.eye(N, dtype=complex)
+                    for l in range(numLayers):
+                        U = clements_build(phases[ppl*l:ppl*(l+1)], m)
+                        phiU = aa_phi(U, n)
+                        if l < numLayers - 1:
+                            nonlinD = var_nonlin_diag(thetas[m*l:m*(l+1)], n, m)
+                            phiU = np.multiply(nonlinD, phiU)
+                            
+                        S = np.dot(phiU, S)
+                    return S
+            else:
+                def build_system(x):
+                    phases = x[:numPhases]
+                    thetas = x[numPhases:]
+
+                    S = np.eye(NL, dtype=complex)
+                    for l in range(numLayers):
+                        U = clements_build(phases[ppl*l:ppl*(l+1)], m)
+                        phiU = aa_phi_lossy(U, n)
+                        if l < numLayers - 1:
+                            nonlinD = var_nonlin_diag_lossy(
+                                thetas[m*l:m*(l+1)], n, m)
+                            phiU = np.multiply(nonlinD, phiU)
+                        S = np.dot(phiU, S)
+                    return S
 
         elif method == 'reck':
             def build_system(phases):

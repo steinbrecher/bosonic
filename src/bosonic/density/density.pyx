@@ -62,7 +62,7 @@ def get_deletion_mapping(n, m, d):
 
 
 @primitive
-@cython.boundscheck(False)
+# @cython.boundscheck(False)
 def delete_mode(np.ndarray[np.complex128_t, ndim=2] rho,
                 size_t n, size_t m, int d):
     cdef size_t NOut = lossy_basis_size(n, m-1)

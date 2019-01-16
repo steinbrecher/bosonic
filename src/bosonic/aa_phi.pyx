@@ -582,11 +582,11 @@ def aa_phi_vjp_fast(np.ndarray[np.complex128_t, ndim=2] g,
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def aa_phi_vjp(np.ndarray[np.complex128_t, ndim=2] ans, a, size_t n):
+def aa_phi_vjp(ans, a, size_t n):
     """aa_phi_vjp_fast wrapper for autograd vjp interface"""
     cdef size_t m = a.shape[0]
 
-    def vjp(np.ndarray[np.complex128_t, ndim=2] g):
+    def vjp(g):
         return aa_phi_vjp_fast(g, a, n, m)
     return vjp
 
@@ -741,6 +741,7 @@ def aa_phi_restricted(np.ndarray[np.complex128_t, ndim=2] U, size_t n,
     return phiU
 
 
+@primitive
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def aa_phi_lossy(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
@@ -761,3 +762,25 @@ def aa_phi_lossy(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
         nn -= 1
         count += NN
     return S
+
+def aa_phi_lossy_vjp(np.ndarray[np.complex128_t, ndim=2] ans, a, size_t n):
+    """aa_phi_vjp_fast wrapper for autograd vjp interface"""
+    cdef size_t m = a.shape[0]
+
+    def vjp(np.ndarray[np.complex128_t, ndim=2] g):
+        cdef size_t nn = n
+        cdef size_t count = 0
+        cdef size_t NN
+        cdef np.ndarray[np.complex128_t, ndim=2] gg
+        cdef np.ndarray[np.complex128_t, ndim=2] du = np.zeros((m,m), dtype=complex)
+        while nn > 0:
+            NN = basis_size(nn, m)
+            gg = g[count:count+NN, count:count+NN]
+            du += aa_phi_vjp_fast(gg, a, nn, m)
+            nn -= 1
+            count += NN
+        return du
+    return vjp
+
+
+defvjp(aa_phi_lossy, aa_phi_lossy_vjp, None)

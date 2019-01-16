@@ -10,6 +10,16 @@ It was originally developed for the devleopment of our Quantum Optical
 Neural Networks [1] and contains specialized functionality for their
 simulation and optimization.
 
+Key focuses of this library were two-fold:
+1. Speed: Key functionality is written in optimized Cython with support for
+   OpenMP threading
+2. Pervasive autograd support: We rely heavily on the use of the Autograd [1]
+   library for gradient computation and efficient optimization of system
+   parameters. Wherever optimized forward-pass functions are written in Cython,
+   there should be explicit support for autograd coded as well. This is not
+   currently universally true, but there is support for all major functions.
+   
+
 Key Functionality
 =================
 The core motivation for this package was the rapid computation of the
