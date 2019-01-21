@@ -25,4 +25,4 @@ __author__ = "Greg Steinbrecher"
 __email__ = "steinbrecher@alum.mit.edu"
 
 __license__ = "MIT"
-__copyright__ = "Copyright (c) 2017-2018 Greg Steinbrecher"
+__copyright__ = "Copyright (c) 2017-2019 Greg Steinbrecher"
