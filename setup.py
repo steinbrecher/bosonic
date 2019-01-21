@@ -8,15 +8,15 @@ import os
 import re
 
 NAME = "bosonic"
-PACKAGES = find_packages(where="src")
-META_PATH = os.path.join("src", "bosonic", "__init__.py")
+PACKAGES = find_packages(where=".")
+META_PATH = os.path.join("bosonic", "__init__.py")
 KEYWORDS = []
 CLASSIFIERS = []
 INSTALL_REQUIRES = ["numpy", "autograd"]
 
 NUMPY_INCLUDE = np.get_include()
 
-# Import metadata from src/bosonic/__init__.py
+# Import metadata from bosonic/__init__.py
 # This is taken from:
 # https://hynek.me/articles/sharing-your-labor-of-love-pypi-quick-and-dirty/
 HERE = os.path.abspath(os.path.dirname(__file__))
@@ -59,19 +59,19 @@ extra_link_args = ['-fopenmp', '-flto',
 ext_modules = [
     Extension(
         "bosonic.fock",
-        ["src/bosonic/fock.pyx"],
+        ["bosonic/fock.pyx"],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
     ),
     Extension(
         "bosonic.aa_phi",
-        ["src/bosonic/aa_phi.pyx"],
+        ["bosonic/aa_phi.pyx"],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
     ),
     Extension(
         "bosonic.density.density",
-        ["src/bosonic/density/density.pyx"],
+        ["bosonic/density/density.pyx"],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
     ),
@@ -99,7 +99,7 @@ if __name__ == '__main__':
         long_description=LONG,
         ext_modules=cythonize(ext_modules),
         packages=PACKAGES,
-        package_dir={"": "src"},
+        package_dir={"": "."},
         zip_safe=False,
         install_requires=INSTALL_REQUIRES,
         test_suite='nose.collector',

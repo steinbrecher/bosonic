@@ -6,14 +6,14 @@ from . import density
 from . import reck
 from . import fock
 from . import clements
-from . import autograd
+from . import qonn
 # from .phi_dispatch import aa_phi, aa_phi_cpu, aa_phi_gpu
 
 __all__ = [
     "__title__", "__summary__", "__uri__", "__version__", "__author__",
     "__email__", "__license__", "__copyright__", "aa_phi", "aa_phi_lossy",
     "aa_phi_restricted", "density", "binom", "reck", "fock", "clements",
-    "fock_to_idx", "permanent", "autograd", "permanent_vjp", "aa_phi_vjp"
+    "fock_to_idx", "permanent", "qonn", "permanent_vjp", "aa_phi_vjp"
 ]
 
 __title__ = "bosonic"
