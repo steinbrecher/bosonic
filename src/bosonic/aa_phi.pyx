@@ -330,6 +330,8 @@ def aa_phi(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
     complexity of linear optics." In Proceedings of the forty-third
     annual ACM symposium on Theory of computing, pp. 333-342. ACM, 2011.
     """
+    if n == 1:
+        return U
 
     cdef size_t N, m
 
@@ -585,6 +587,8 @@ def aa_phi_vjp_fast(np.ndarray[np.complex128_t, ndim=2] g,
 def aa_phi_vjp(ans, a, size_t n):
     """aa_phi_vjp_fast wrapper for autograd vjp interface"""
     cdef size_t m = a.shape[0]
+    if n == 1:
+        return lambda g: g
 
     def vjp(g):
         return aa_phi_vjp_fast(g, a, n, m)
@@ -763,9 +767,9 @@ def aa_phi_lossy(np.ndarray[np.complex128_t, ndim=2] U, size_t n):
         count += NN
     return S
 
-def aa_phi_lossy_vjp(np.ndarray[np.complex128_t, ndim=2] ans, a, size_t n):
+def aa_phi_lossy_vjp(np.ndarray[np.complex128_t, ndim=2] ans, U, size_t n):
     """aa_phi_vjp_fast wrapper for autograd vjp interface"""
-    cdef size_t m = a.shape[0]
+    cdef size_t m = U.shape[0]
 
     def vjp(np.ndarray[np.complex128_t, ndim=2] g):
         cdef size_t nn = n
@@ -773,12 +777,15 @@ def aa_phi_lossy_vjp(np.ndarray[np.complex128_t, ndim=2] ans, a, size_t n):
         cdef size_t NN
         cdef np.ndarray[np.complex128_t, ndim=2] gg
         cdef np.ndarray[np.complex128_t, ndim=2] du = np.zeros((m,m), dtype=complex)
-        while nn > 0:
+        while nn > 1:
             NN = basis_size(nn, m)
             gg = g[count:count+NN, count:count+NN]
-            du += aa_phi_vjp_fast(gg, a, nn, m)
+            du = du + aa_phi_vjp_fast(gg, U, nn, m)
             nn -= 1
             count += NN
+        # Single photon case explicitly
+        NN = m
+        du += g[count:count+NN, count:count+NN]
         return du
     return vjp
 
