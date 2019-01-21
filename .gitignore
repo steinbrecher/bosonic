@@ -109,3 +109,6 @@ jupyterhub.sqlite
 
 # Mac file
 *.DS_Store
+
+# Ignore generated C code
+*.c

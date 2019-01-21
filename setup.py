@@ -102,4 +102,6 @@ if __name__ == '__main__':
         package_dir={"": "src"},
         zip_safe=False,
         install_requires=INSTALL_REQUIRES,
+        test_suite='nose.collector',
+        tests_require=['nose'],
     )
