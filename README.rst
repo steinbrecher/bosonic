@@ -11,6 +11,7 @@ Neural Networks [1] and contains specialized functionality for their
 simulation and optimization.
 
 Key focuses of this library were two-fold:
+
 1. Speed: Key functionality is written in optimized Cython with support for
    OpenMP threading
 2. Pervasive autograd support: We rely heavily on the use of the Autograd [1]
