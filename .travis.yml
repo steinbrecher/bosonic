@@ -16,5 +16,4 @@ install:
   - pip install .
 # command to run tests
 script:
-  - cd bosonic/tests
-  - nosetests
+  - python setup.py test
