@@ -12,7 +12,7 @@ PACKAGES = find_packages(where=".")
 META_PATH = os.path.join("bosonic", "__init__.py")
 KEYWORDS = []
 CLASSIFIERS = []
-INSTALL_REQUIRES = ["Cython", "numpy", "autograd"]
+INSTALL_REQUIRES = ["Cython", "numpy", "autograd", "scipy"]
 
 NUMPY_INCLUDE = np.get_include()
 
