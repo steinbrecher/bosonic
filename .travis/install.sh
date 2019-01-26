@@ -3,16 +3,16 @@
 if [[ $TRAVIS_OS_NAME == 'osx' ]]
 then
     { brew install --upgrade gcc || true; }
+    CC=$(which gcc-8)
     case "${TOXENV}" in
 	py27)
-	    { brew install --upgrade python@2 || true; }
+	    /usr/local/bin/pip2 install .
 	    ;;
 	py37)
-	    { brew install --upgrade python || true; }
+	    /usr/local/bin/pip3 install .
 	    ;;
     esac
     
-    CC=$(which gcc-8) pip install .
 else
     pip install Cython
     pip install nose
