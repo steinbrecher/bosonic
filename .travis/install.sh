@@ -5,10 +5,10 @@ then
     brew install gcc
     case "${TOXENV}" in
 	py27)
-	    brew install python@2
+	    { brew install upgrade python@2 || true }
 	    ;;
 	py37)
-	    brew install python
+	    { brew install upgrade python || true }
 	    ;;
     esac
     
