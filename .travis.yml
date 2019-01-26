@@ -12,7 +12,9 @@ python:
 # command to install dependencies
 install:
   - pip install Cython
+  - pip install nose
   - pip install .
 # command to run tests
-# script:
-#   - pytest
+script:
+  - cd bosonic/tests
+  - nosetests
