@@ -6,15 +6,15 @@ then
     CC=$(which gcc-8)
     case "${TOXENV}" in
 	py27)
-	    /usr/local/bin/pip2 install .
+	    alias pip=/usr/local/bin/pip2
 	    ;;
 	py37)
-	    /usr/local/bin/pip3 install .
+	    alias pip=/usr/local/bin/pip3
 	    ;;
     esac
     
-else
-    pip install Cython
-    pip install nose
-    pip install .
 fi
+pip install Cython
+pip install nose
+pip install .
+
