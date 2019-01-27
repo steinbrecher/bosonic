@@ -3,7 +3,6 @@
 if [[ $TRAVIS_OS_NAME == 'osx' ]]
 then
     { brew install --upgrade gcc || true; }
-    CC=$(which gcc-8)
     case "${TOXENV}" in
 	py27)
 	    alias pip=/usr/local/bin/pip2
@@ -12,9 +11,12 @@ then
 	    alias pip=/usr/local/bin/pip3
 	    ;;
     esac
-    
+    pip install Cython
+    pip install nose
+    CC=$(which gcc-8) pip install .
+else
+    pip install Cython
+    pip install nose
+    pip install .
 fi
-pip install Cython
-pip install nose
-pip install .
 
