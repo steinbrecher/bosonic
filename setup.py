@@ -50,8 +50,10 @@ def find_meta(meta):
 # TODO: Make this compile on multiple platforms nicely
 # extra_compile_args=['-O3', '-march=native', '-flto', '-fopenmp',
 #                     '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)],
-extra_compile_args = ['-Ofast', '-march=native', '-flto', '-funroll-loops',
-                      '-fopenmp', '-static-libgcc',
+# extra_compile_args = ['-Ofast', '-march=native', '-flto', '-funroll-loops',
+#                       '-fopenmp', '-static-libgcc',
+#                       '-I{}'.format(NUMPY_INCLUDE)]
+extra_compile_args = ['-flto', '-fopenmp', '-static-libgcc',
                       '-I{}'.format(NUMPY_INCLUDE)]
 extra_link_args = ['-fopenmp', '-flto',
                    '-static-libgcc', '-I{}'.format(NUMPY_INCLUDE)]
