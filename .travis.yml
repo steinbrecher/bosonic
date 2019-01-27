@@ -1,4 +1,5 @@
 language: python
+osx_image: xcode10.1
 matrix:
   include:
     - os: linux
