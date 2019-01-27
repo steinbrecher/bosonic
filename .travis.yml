@@ -1,5 +1,4 @@
 language: python
-osx_image: xcode10.1
 matrix:
   include:
     - os: linux
@@ -18,9 +17,11 @@ matrix:
     #   python: 3.7
     #   env: TOXENV=py37
     - os: osx
+      osx_image: xcode10.1
       language: generic
       env: TOXENV=py27
     - os: osx
+      osx_image: xcode10.1
       language: generic
       env: TOXENV=py37
       

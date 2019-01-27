@@ -11,6 +11,8 @@ then
 	    alias pip=/usr/local/bin/pip3
 	    ;;
     esac
+    pip install --upgrade numpy
+    pip install --upgrade scipy
     pip install Cython
     pip install nose
     CC=$(which gcc-8) pip install .
