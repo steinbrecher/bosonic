@@ -56,6 +56,17 @@ class TestFockBasis(unittest.TestCase):
                 for elem in basis:
                     self.assertEqual(sum(elem), n)
 
+    def test_basis_unique(self):
+        """Check that all elements in each basis are unique"""
+        for n in range(1, MAX_PHOTONS+1):
+            for m in range(1, MAX_MODES+1):
+                basis = b.fock.basis(n, m)
+                elements = set()
+                for elem in basis:
+                    et = tuple(elem)
+                    self.assertFalse(et in elements)
+                    elements.add(et)
+
     def test_basis_spot_checks(self):
         """Test fock.basis for selected random inputs
 
@@ -87,10 +98,25 @@ class TestFockBasis(unittest.TestCase):
             elem = b.fock.basis(n, m)[i]
             self.assertEqual(tuple(elem), refElem)
 
+    def test_lossy_basis(self):
+        """Check that lossy_basis is the concatenation of the lossless bases"""
+        for n in range(1, MAX_PHOTONS+1):
+            for m in range(1, MAX_MODES+1):
+                lossyBasis = b.fock.lossy_basis(n, m)
+                while n >= 0:
+                    refBasis = b.fock.basis(n, m)
+                    for i, elem in enumerate(refBasis):
+                        refElem = tuple(elem)
+                        testElem = tuple(lossyBasis[i])
+                        self.assertEqual(refElem, testElem)
+
+                    # Cut off this section of the lossy basis
+                    lossyBasis = lossyBasis[len(refBasis):]
+                    n -= 1
 
 class TestBasisUtilFunctions(unittest.TestCase):
     def test_basis_size(self):
-        """Check that foock.basis_size returns the right size"""
+        """Check that fock.basis_size returns the right size"""
         for n in range(1, MAX_PHOTONS+1):
             for m in range(1, MAX_MODES+1):
                 n1 = len(b.fock.basis(n, m))
@@ -113,3 +139,32 @@ class TestBasisUtilFunctions(unittest.TestCase):
                 b2 = np.array(b.fock.basis(n, m))
                 diff = np.sum(np.abs(b1 - b2))
                 self.assertEqual(diff, 0)
+
+    def test_loossy_basis_array(self):
+        """Check that fock.lossy_basis_array and fock.lossy_basis match"""
+        for n in range(1, MAX_PHOTONS+1):
+            for m in range(1, MAX_MODES+1):
+                b1 = b.fock.lossy_basis_array(n, m)
+                b2 = np.array(b.fock.lossy_basis(n, m))
+                diff = np.sum(np.abs(b1 - b2))
+                self.assertEqual(diff, 0)
+
+    def test_basis_lookup(self):
+        """Check fock.basis_lookup dictionaries"""
+        for n in range(1, MAX_PHOTONS+1):
+            for m in range(1, MAX_MODES+1):
+                basis = b.fock.basis(n, m)
+                basisLookup = b.fock.basis_lookup(n, m)
+                for i, elem in enumerate(basis):
+                    lookupI = basisLookup[tuple(elem)]
+                    self.assertEqual(i, lookupI)
+
+    def test_lossy_basis_lookup(self):
+        """Check fock.basis_lookup dictionaries"""
+        for n in range(1, MAX_PHOTONS+1):
+            for m in range(1, MAX_MODES+1):
+                basis = b.fock.lossy_basis(n, m)
+                basisLookup = b.fock.lossy_basis_lookup(n, m)
+                for i, elem in enumerate(basis):
+                    lookupI = basisLookup[tuple(elem)]
+                    self.assertEqual(i, lookupI)

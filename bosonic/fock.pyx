@@ -82,6 +82,13 @@ def lossy_basis(numPhotons, numModes):
 
 
 @memoize
+def lossy_basis_array(int n, int m):
+    cdef np.ndarray[np.int_t, ndim= 2] basis_array = np.array(
+        lossy_basis(n, m), dtype=np.int)
+    return basis_array
+
+
+@memoize
 def lossy_basis_lookup(n, m):
     lookup = dict()
     outputBasis = lossy_basis(n, m)
