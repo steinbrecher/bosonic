@@ -1,6 +1,7 @@
 # Bosonic: A Quantum Optics Library
-[![Test status](https://travis-ci.org/steinbrecher/bosonic.svg?branch=master)](https://travis-ci.org/steinbrecher/bosonic)
-[![Open Source Love](https://badges.frapsoft.com/os/mit/mit.svg?v=102)](https://github.com/ellerbrock/open-source-badge/)
+[![Test Status Badge](https://travis-ci.org/steinbrecher/bosonic.svg?branch=master)](https://travis-ci.org/steinbrecher/bosonic)
+[![Coverage Badge](https://codecov.io/github/steinbrecher/bosonic/coverage.svg?branch=master)](https://codecov.io/github/steinbrecher/bosonic?branch=master)
+[![MIT License Badge](https://badges.frapsoft.com/os/mit/mit.svg?v=102)](https://github.com/ellerbrock/open-source-badge/)
 
 Bosonic is a library developed for the siimulation of photonic systems whose inputs are indistinguishable bosons (in the case of the authors' interest, photons). In particular, it focuses on the rapid computation of the multi-particle transfer functions for these systems, and supports computation of the gradient of a cost function with respect to the system parameters. It was originally developed for the devleopment of our Quantum Optical Neural Networks [1] and contains specialized functionality for their simulation and optimization.
 
