@@ -6,3 +6,8 @@ then
 else
     python setup.py test
 fi
+
+pip install codecov
+pip install pytest-cov
+pytest --cov=bosonic tests/
+codecov 
