@@ -16,7 +16,7 @@ then
     pip install --upgrade --user scipy
     pip install --user Cython
     pip install --user nose
-    CC=$(which gcc-8) pip install .
+    CC=gcc-8 pip install .
 else
     pip install Cython
     pip install nose
