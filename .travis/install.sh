@@ -3,6 +3,7 @@
 if [[ $TRAVIS_OS_NAME == 'osx' ]]
 then
     { brew install gcc || true; }
+    { brew link gcc || true; }
     { brew install libomp || true; }
     case "${TOXENV}" in
 	py27)
