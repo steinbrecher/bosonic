@@ -82,7 +82,7 @@ ext_modules = [
 VERSION = find_meta("version")
 URL = find_meta("url")
 LONG = (
-    read("README.rst")
+    read("README.md")
 )
 
 
