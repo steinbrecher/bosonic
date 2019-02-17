@@ -58,6 +58,20 @@ class TestFockBasis(unittest.TestCase):
 
     def test_basis_spot_checks(self):
         """Test fock.basis for selected random inputs"""
+        tests = [(5, 9, 571, (0, 2, 0, 1, 0, 1, 1, 0, 0)),
+                 (5, 6, 195, (0, 1, 0, 0, 0, 4)),
+                 (2, 5, 11, (0, 0, 1, 0, 1)),
+                 (2, 8, 11, (0, 1, 0, 0, 1, 0, 0, 0)),
+                 (1, 7, 6, (0, 0, 0, 0, 0, 0, 1)),
+                 (5, 4, 13, (2, 1, 2, 0)),
+                 (5, 10, 1136, (0, 1, 0, 0, 1, 0, 0, 0, 3, 0)),
+                 (3, 5, 20, (0, 1, 1, 1, 0)),
+                 (2, 6, 10, (0, 1, 0, 0, 0, 1)),
+                 (2, 3, 0, (2, 0, 0))]
+
+        for n, m, i, refElem in tests:
+            elem = b.fock.basis(n, m)[i]
+            self.assertEqual(tuple(elem), refElem)
 
 
 class TestBasisUtilFunctions(unittest.TestCase):
