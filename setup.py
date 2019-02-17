@@ -85,6 +85,10 @@ LONG = (
     read("README.md")
 )
 
+compiler_directives = {
+    'language_level': 3,
+}
+
 
 if __name__ == '__main__':
     setup(
@@ -99,7 +103,8 @@ if __name__ == '__main__':
         maintainer_email=find_meta("email"),
         keywords=KEYWORDS,
         long_description=LONG,
-        ext_modules=cythonize(ext_modules),
+        ext_modules=cythonize(ext_modules,
+                              compiler_directives=compiler_directives),
         packages=PACKAGES,
         package_dir={"": "."},
         zip_safe=False,

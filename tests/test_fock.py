@@ -57,7 +57,21 @@ class TestFockBasis(unittest.TestCase):
                     self.assertEqual(sum(elem), n)
 
     def test_basis_spot_checks(self):
-        """Test fock.basis for selected random inputs"""
+        """Test fock.basis for selected random inputs
+
+        Code that generated these (with verified implementation):
+            import random
+            import bosonic as b
+
+            tests = []
+            for _ in range(10):
+                n = random.randint(1, 5)
+                m = random.randint(1, 10)
+                basis = b.fock.basis(n, m)
+                i = random.randint(0, len(basis)-1)
+                element = basis[i]
+                tests.append((n, m, i, tuple(element)))
+        """
         tests = [(5, 9, 571, (0, 2, 0, 1, 0, 1, 1, 0, 0)),
                  (5, 6, 195, (0, 1, 0, 0, 0, 4)),
                  (2, 5, 11, (0, 0, 1, 0, 1)),
