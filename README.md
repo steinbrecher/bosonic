@@ -12,10 +12,10 @@ Key focuses of this library were two-fold:
    
 
 # Key Functionality
-
+## Multi-particle Unitary Evolution
 The core motivation for this package was the rapid computation of the multi-particle unitary transform as a function of the single particle unitary and the number of bosonic inputs. That is, if we have a four dimensional unitary U, and we know there are 3 photons at the input, we want to know the transformation over the $\binom{4+3-1, 3}$-dimensional basis $[3,0,0,0], [2,1,0,0], [2,0,1,0], ... etc.
 
-This is supported by the function `bosonic.aa_phi`, which is named after Aaronson and Arkhipov, who specified the form of this function that we use as their $\Phi(U)$ function in [2]. For example, we can demonstrate the famous Hong-Ou-Mandel effect with a beamsplitter:
+This is supported by the function `bosonic.aa_phi`, which is named after Aaronson and Arkhipov, who specified the form of this function that we use as their Φ(U) function in [2]. For example, we can demonstrate the famous Hong-Ou-Mandel effect with a beamsplitter:
 
 ```python
 >>> import bosonic as b
@@ -41,6 +41,11 @@ This is supported by the function `bosonic.aa_phi`, which is named after Aaronso
 ```
 
 Here, we build the unitary corresponding to a 50/50 beamsplitter in U. As shown the line after we print phiU, the basis here is [2, 0], [1, 1], and [0, 2]. So the state corresponding to one photon incident at each of the inputs is [0, 1, 0]. In the final line, two lines, we see that the output is an equal superposition over two photons at one output and two photons at the other, with no probability of the photons leaving by different ports.
+
+## Quantum Optical Neural Networks
+As described in [1], we've developed a proposed architecture for quantum optical neural networks that involves tiling arbitrary unitary transformations with single-site nonlinearities. See the paper for more details, but here's a visual summary of the architecture:
+
+![Quantum Optical Neural Network Architecture](doc/images/architecture.png?raw=true)
 
 # Installation
 
