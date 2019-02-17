@@ -2,8 +2,8 @@
 
 if [[ $TRAVIS_OS_NAME == 'osx' ]]
 then
-    { brew install --upgrade gcc || true; }
-    { brew install --upgrade libomp || true; }
+    { brew install gcc || true; }
+    { brew install libomp || true; }
     case "${TOXENV}" in
 	py27)
 	    alias pip=/usr/local/bin/pip2
