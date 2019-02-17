@@ -216,3 +216,40 @@ class TestNonlinear(unittest.TestCase):
             diff = np.sum(np.abs(refA - np.diag(A)))
             self.assertAlmostEqual(diff, 0)
             self.assertEqual(A.shape, (10, 10))
+
+    def test_wrong_size_phase_vec(self):
+        """Make sure error is thrown for wrong theta vector"""
+        # Run three random n/m pairs
+        for _ in range(3):
+            n = random.randint(1, 4)
+            m = random.randint(1, 8)
+
+            # Supply too many thetas
+            thetas = np.random.random((m+1,)) * np.pi
+            with self.assertRaises(ValueError):
+                b.nonlinear.build_fock_nonlinear_layer(
+                    n, m, thetas, lossy=False, matrix=False)
+            with self.assertRaises(ValueError):
+                b.nonlinear.build_fock_nonlinear_layer(
+                    n, m, thetas, lossy=False, matrix=True)
+            with self.assertRaises(ValueError):
+                b.nonlinear.build_fock_nonlinear_layer(
+                    n, m, thetas, lossy=True, matrix=False)
+            with self.assertRaises(ValueError):
+                b.nonlinear.build_fock_nonlinear_layer(
+                    n, m, thetas, lossy=True, matrix=True)
+
+            # Supply zero thetas
+            thetas = np.array([])
+            with self.assertRaises(ValueError):
+                b.nonlinear.build_fock_nonlinear_layer(
+                    n, m, thetas, lossy=False, matrix=False)
+            with self.assertRaises(ValueError):
+                b.nonlinear.build_fock_nonlinear_layer(
+                    n, m, thetas, lossy=False, matrix=True)
+            with self.assertRaises(ValueError):
+                b.nonlinear.build_fock_nonlinear_layer(
+                    n, m, thetas, lossy=True, matrix=False)
+            with self.assertRaises(ValueError):
+                b.nonlinear.build_fock_nonlinear_layer(
+                    n, m, thetas, lossy=True, matrix=True)
