@@ -30,4 +30,4 @@ install:
   - ./.travis/install.sh
 # command to run tests
 script:
-  - CC=gcc-8 python setup.py test
+  - ./.travis/test.sh
