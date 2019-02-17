@@ -4,7 +4,7 @@ import unittest
 import bosonic as b
 import numpy as np
 import itertools as it
-from scipy.misc import factorial
+from scipy.special import factorial
 
 
 def permanent_slow(a):
@@ -59,18 +59,21 @@ def aa_phi_slow(U, n):
 
 class TestReferenceImplementations(unittest.TestCase):
     def test_perm2_real(self):
+        """Test reference permanent for 2x2 real matrices"""
         a = np.random.randn(2, 2)
         permA = permanent_slow(a)
         permACorrect = a[0, 0] * a[1, 1] + a[0, 1] * a[1, 0]
         self.assertTrue(np.allclose(permA, permACorrect))
 
     def test_perm2_complex(self):
+        """Test reference permanent for 2x2 complex matrices"""
         a = np.random.randn(2, 2) + 1j * np.random.randn(2, 2)
         permA = permanent_slow(a)
         permACorrect = a[0, 0] * a[1, 1] + a[0, 1] * a[1, 0]
         self.assertTrue(np.allclose(permA, permACorrect))
 
     def test_perm3_real(self):
+        """Test reference permanent for 3x3 real matrices"""
         a = np.random.randn(3, 3)
         permA = permanent_slow(a)
         permACorrect = 0
@@ -80,6 +83,7 @@ class TestReferenceImplementations(unittest.TestCase):
         self.assertTrue(np.allclose(permA, permACorrect))
 
     def test_perm3_complex(self):
+        """Test reference permanent for 3x3 complex matrices"""
         a = np.random.randn(3, 3)
         permA = permanent_slow(a)
         permACorrect = 0
@@ -89,6 +93,7 @@ class TestReferenceImplementations(unittest.TestCase):
         self.assertTrue(np.allclose(permA, permACorrect))
 
     def test_hom_symm(self):
+        """Test reference aa_phi implementation HOM effect on symmetric bs"""
         U = np.array([[1, 1j], [1j, 1]]) / np.sqrt(2)
         phiU = aa_phi_slow(U, 2)
         phiUCorrect = np.array(
@@ -98,6 +103,7 @@ class TestReferenceImplementations(unittest.TestCase):
         self.assertTrue(np.allclose(phiU, phiUCorrect))
 
     def test_hom_hadamard(self):
+        """Test reference aa_phi implementation HOM effect on hadamard bs"""
         U = np.array([[1, 1], [1, -1]], dtype=complex) / np.sqrt(2)
         phiU = aa_phi_slow(U, 2)
         phiUCorrect = np.array(
@@ -109,6 +115,7 @@ class TestReferenceImplementations(unittest.TestCase):
 
 class TestAAPhi(unittest.TestCase):
     def test_aa_phi(self):
+        """Test b.aa_phi against reference implementation for random inputs"""
         ms = range(1, 5)
         ns = range(1, 5)
         for m in ms:

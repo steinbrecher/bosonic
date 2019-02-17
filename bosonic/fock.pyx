@@ -7,9 +7,9 @@ from .util import memoize
 cimport numpy as np
 
 
-# Fast implementations of factorial and binomial assuming integer inputs
 @memoize
 def factorial(int n):
+    """Optimized factorial implementation for integers"""
     cdef long long answer = 1
     for x in range(2, n+1):
         answer = answer * x
@@ -18,6 +18,7 @@ def factorial(int n):
 
 @memoize
 def binom(int n, int m):
+    """Optimized binomial implementation for integers"""
     cdef unsigned long long numer = 1
     cdef unsigned long long denom = factorial(n-m)
     for x in range(m+1, n+1):
@@ -64,8 +65,6 @@ def basis_lookup(n, m):
 # Memoized function to build the basis efficiently
 # Note: basis is a numpy array here, not a list of lists as fock_basis
 # returns
-
-
 @memoize
 def basis_array(int n, int m):
     cdef np.ndarray[np.int_t, ndim= 2] basis_array = np.array(
